@@ -298,6 +298,8 @@ export interface MapNodeDef {
   // 地图网格坐标（3 列 × 2 行）
   x: number;
   y: number;
+  // M6：横版行走场景中的像素坐标（世界宽 2900px）
+  sceneX: number;
   links: string[]; // 可直达的相邻地点
 }
 
@@ -311,6 +313,7 @@ export const MAP_NODES: MapNodeDef[] = [
     desc: "立誓拜入的宗门。山门巍峨，楼阁层叠，灵气温厚，是安身修行的起点。",
     x: 0,
     y: 0,
+    sceneX: 240,
     links: ["blackwind", "cave"],
   },
   {
@@ -325,6 +328,7 @@ export const MAP_NODES: MapNodeDef[] = [
     dropMul: 1.6,
     x: 1,
     y: 0,
+    sceneX: 1080,
     links: ["qixuan", "mist", "spiritfield"],
   },
   {
@@ -339,6 +343,7 @@ export const MAP_NODES: MapNodeDef[] = [
     dropMul: 2.0,
     x: 2,
     y: 0,
+    sceneX: 1950,
     links: ["blackwind", "demonvalley"],
   },
   {
@@ -351,6 +356,7 @@ export const MAP_NODES: MapNodeDef[] = [
     dungeon: true,
     x: 0,
     y: 1,
+    sceneX: 640,
     links: ["qixuan", "spiritfield"],
   },
   {
@@ -363,6 +369,7 @@ export const MAP_NODES: MapNodeDef[] = [
     speedBonus: 0.3,
     x: 1,
     y: 1,
+    sceneX: 1500,
     links: ["blackwind", "cave", "demonvalley"],
   },
   {
@@ -377,6 +384,7 @@ export const MAP_NODES: MapNodeDef[] = [
     dropMul: 2.8,
     x: 2,
     y: 1,
+    sceneX: 2400,
     links: ["mist", "spiritfield"],
   },
 ];

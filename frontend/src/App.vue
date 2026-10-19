@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from "vue";
 import { DUNGEON, ITEMS, HERBS, PILLS, PETS, PET_BLOOD, METHODS, MISSIONS, REALMS, SPELLS, MAP_NODES, SIGN, type MapNodeDef, type HerbDef, type PillDef } from "./game/data";
 import {
   type GameState,
@@ -380,6 +380,96 @@ const nodeClick = (n: MapNodeDef) => {
   flushToasts();
 };
 
+// ===== M6：横版行走场景（人在山水里走：点地点 → 走过去 → 踏入）=====
+const SCENE_W = 2900; // 世界像素宽
+const sceneEl = ref<HTMLElement | null>(null);
+const sceneShellEl = ref<HTMLElement | null>(null);
+const playerX = ref(curNode().sceneX); // 人物当前 x（世界坐标）
+const walking = ref(false);
+const face = ref(1); // 1 朝右 / -1 朝左
+let walkRaf: number | undefined;
+
+function updateParallax() {
+  const el = sceneEl.value;
+  const shell = sceneShellEl.value;
+  if (!el || !shell) return;
+  // 远/中层比近景慢：近景原生滚动 scrollLeft，远处只位移一部分（负值=向左慢移）
+  shell.style.setProperty("--sx-far", (el.scrollLeft * -0.3).toFixed(1) + "px");
+  shell.style.setProperty("--sx-mid", (el.scrollLeft * -0.55).toFixed(1) + "px");
+}
+function sceneCenter(smooth = true) {
+  const el = sceneEl.value;
+  if (!el) return;
+  const want = playerX.value - el.clientWidth / 2;
+  if (smooth) el.scrollTo({ left: want, behavior: "smooth" });
+  else { el.scrollLeft = Math.max(0, want); updateParallax(); }
+}
+// 点地点：相邻→走过去（缓动 + 跟随滚动），到达后踏入（moveTo 结算遭遇/加成）
+function walkTo(n: MapNodeDef) {
+  if (walking.value) return;
+  const st = nodeState(n);
+  if (st === "here") return;
+  if (st === "locked") {
+    toasts.value.push({ id: ++toastId, text: `${n.name}：${nodeLockText(n, s.value)}`, kind: "info" });
+    window.setTimeout(() => dismissToast(toasts.value[toasts.value.length - 1].id), 2600);
+    return;
+  }
+  if (st === "far") {
+    toasts.value.push({ id: ++toastId, text: `距${n.name}尚有山路，须循相邻地点而行。`, kind: "info" });
+    window.setTimeout(() => dismissToast(toasts.value[toasts.value.length - 1].id), 2600);
+    return;
+  }
+  const from = playerX.value;
+  const to = n.sceneX;
+  const dist = Math.abs(to - from);
+  if (dist < 2) {
+    moveTo(s.value, n.id);
+    flushToasts();
+    return;
+  }
+  face.value = to > from ? 1 : -1;
+  walking.value = true;
+  const dur = Math.min(5000, 700 + dist / 240); // 走越远花越久，上限 5s
+  const t0 = performance.now();
+  const step = (t: number) => {
+    const k = Math.min(1, (t - t0) / dur);
+    const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; // easeInOut
+    playerX.value = from + (to - from) * e;
+    const el = sceneEl.value;
+    if (el) {
+      const want = playerX.value - el.clientWidth / 2;
+      el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, want));
+      updateParallax();
+    }
+    if (k < 1) {
+      walkRaf = requestAnimationFrame(step);
+    } else {
+      walking.value = false;
+      moveTo(s.value, n.id); // 踏入：野外可能遭遇、宝地得加成
+      flushToasts();
+    }
+  };
+  walkRaf = requestAnimationFrame(step);
+}
+// 从地图页直接移步（非行走）时，人物与镜头同步
+watch(
+  () => s.value.loc,
+  () => {
+    if (!walking.value) {
+      playerX.value = curNode().sceneX;
+      sceneCenter(false);
+    }
+  }
+);
+// 切回修炼 Tab 时把镜头回正
+watch(mainTab, (t) => {
+  if (t === "xiu") nextTick(() => sceneCenter(false));
+});
+// 首屏把镜头对准人物
+onMounted(() => {
+  nextTick(() => sceneCenter(false));
+});
+
 let timer: number | undefined;
 const onHide = () => save(s.value);
 onMounted(() => {
@@ -399,6 +489,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   if (timer !== undefined) window.clearInterval(timer);
+  if (walkRaf !== undefined) cancelAnimationFrame(walkRaf);
   window.removeEventListener("beforeunload", onHide);
   window.removeEventListener("pagehide", onHide);
 });
@@ -469,13 +560,36 @@ onBeforeUnmount(() => {
     </div>
 
     <section class="card hero-card" v-show="mainTab === 'xiu' && !inBattle">
-      <!-- 修行者立绘（一念逍遥式中央立像，随境界而变） -->
-      <div class="figure">
-        <div class="figure-glow" :style="{ animationDuration: (9 - s.realm) + 's' }"></div>
-        <div class="figure-glyph">{{ figureGlyph() }}</div>
-        <div class="figure-cap">
-          <b>{{ s.name }}</b>
-          <span class="dim">七玄门 · {{ s.rank }}</span>
+      <!-- M6：横版行走场景（人在山水里走：视差远山 + 可点地点 + 行走人物） -->
+      <div class="scene-shell" ref="sceneShellEl">
+        <svg class="scene-sky sky-far" viewBox="0 0 1440 300" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M-400,190 L-260,120 L-80,190 L120,90 L300,200 L520,110 L720,190 L900,100 L1100,195 L1300,120 L1500,200 L1720,110 L1920,190 L2120,100 L2320,195 L2540,120 L2740,200 L2960,110 L3160,190 L3360,140 L3360,300 L-400,300 Z" />
+        </svg>
+        <svg class="scene-sky sky-mid" viewBox="0 0 1440 300" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M-400,230 L-220,150 L-40,235 L160,130 L360,240 L560,150 L760,235 L960,140 L1160,240 L1360,155 L1560,235 L1760,145 L1960,240 L2160,150 L2360,235 L2560,145 L2760,240 L2960,155 L3160,235 L3360,180 L3360,300 L-400,300 Z" />
+        </svg>
+        <div class="scene" ref="sceneEl" @scroll.passive="updateParallax">
+          <div class="scene-world" :style="{ width: SCENE_W + 'px' }">
+            <!-- 地点（点它走过去） -->
+            <button
+              v-for="n in MAP_NODES"
+              :key="n.id"
+              class="scene-pin"
+              :class="nodeState(n)"
+              :style="{ left: n.sceneX + 'px' }"
+              @click="walkTo(n)"
+            >
+              <span class="pin-ico">{{ n.icon }}</span>
+              <span class="pin-name">{{ n.name }}</span>
+              <span class="pin-tag">{{ nodeState(n) === "here" ? "在此" : nodeState(n) === "locked" ? "🔒" : nodeState(n) === "reach" ? "前往" : "远路" }}</span>
+            </button>
+            <!-- 人物（行走缓动 + 朝向翻转 + 落脚阴影） -->
+            <div class="scene-player" :style="{ left: playerX + 'px' }">
+              <span class="player-glyph" :class="{ walking: walking }" :style="{ transform: 'scaleX(' + face + ')' }">{{ figureGlyph() }}</span>
+              <span class="player-shadow"></span>
+              <span class="player-tag">{{ s.name }}</span>
+            </div>
+          </div>
         </div>
       </div>
       <div class="who">
