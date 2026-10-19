@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "fanren-xiuxian",
-  "main": "worker/entry.ts",
+  "main": "frontend/worker/entry.ts",
   "compatibility_date": "2026-10-01",
   "workers_dev": true,
   "assets": {
