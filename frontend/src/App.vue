@@ -112,7 +112,7 @@ const actHint = () => {
   if (!c) return "";
   if (s.value.spirit < c) {
     const lack = c - s.value.spirit;
-    const sp = speedOf(s); // 每秒（每息）积累量，重伤/入定已计入
+    const sp = speedOf(s.value); // 每秒（每息）积累量，重伤/入定已计入
     const secs = sp > 0 ? Math.ceil(lack / sp) : Infinity;
     const need = Number.isFinite(secs)
       ? `，按当前增速约需 ${secs.toLocaleString()} 息`
