@@ -956,3 +956,71 @@ footer .reset:hover {
   font-size: 11px;
   margin-top: 4px;
 }
+
+/* ===== M3 炼丹炉 ===== */
+.alch-panel {
+  margin-top: 10px;
+}
+.alch-bar {
+  flex: 1;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.3);
+}
+.alch-fill {
+  background: linear-gradient(90deg, #e07020, #ffb347);
+  box-shadow: 0 0 8px rgba(255, 150, 50, 0.6);
+}
+.recipe {
+  border: 1px solid rgba(255, 215, 130, 0.12);
+  border-radius: 8px;
+  padding: 6px 8px;
+  margin-top: 8px;
+  background: rgba(0, 0, 0, 0.15);
+}
+.recipe-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.recipe-meta {
+  font-size: 11px;
+  color: #8a8578;
+}
+.recipe-bottom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.recipe-need {
+  font-size: 12px;
+}
+.recipe-fx {
+  font-size: 11px;
+  color: #d4af37;
+}
+.recipe-bottom .sp-go {
+  margin-left: auto;
+}
+.herb-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.herb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 215, 130, 0.15);
+  border-radius: 14px;
+  padding: 3px 10px;
+}
+.herb-buy {
+  padding: 1px 8px;
+  font-size: 11px;
+}

@@ -1,16 +1,20 @@
 import {
   DUNGEON,
   ENEMIES,
+  HERBS,
   ITEMS,
   MAP_HOME,
   MAP_NODES,
   METHODS,
   MISSIONS,
+  PILLS,
   SPELLS,
   type EnemyDef,
+  type HerbDef,
   type ItemDef,
   type MapNodeDef,
   type MethodDef,
+  type PillDef,
   type SpellDef,
   CN_NUM,
   REALMS,
@@ -53,6 +57,10 @@ export interface GameState {
   dungeon: { room: number; total: number } | null; // 秘境进度
   dungeonClears: number; // 秘境通关次数
   loc: string; // 当前所在地图节点（MAP_NODES id）
+  alch: { pillId: string; until: number } | null; // 丹炉：正在炼制的丹 + 完成时间戳（ms）
+  gatherUntil: number; // 凝气丹修炼加速截止（ms）
+  gatherMul: number; // 凝气丹加速倍率（0=无）
+  breakPillStacks: number; // 破境丹层数（0-3，大突破时消耗）
   logs: LogEntry[];
   lastSave: number;
   created: number;
@@ -82,6 +90,7 @@ export function speedOf(s: GameState): number {
   const m = methodOf(s);
   let v = r.speed * (1 + 0.12 * (s.stage - 1)) * m.speedMul;
   if (Date.now() < s.meditateUntil) v *= MEDITATE_MUL;
+  if (Date.now() < s.gatherUntil && s.gatherMul > 0) v *= 1 + s.gatherMul; // 凝气丹
   if (Date.now() < s.injuredUntil) v *= 0.5;
   const node = currentNode(s);
   if (node?.speedBonus) v *= 1 + node.speedBonus; // 宝地加成
@@ -241,6 +250,10 @@ export function newGame(): GameState {
     dungeon: null,
     dungeonClears: 0,
     loc: MAP_HOME,
+    alch: null,
+    gatherUntil: 0,
+    gatherMul: 0,
+    breakPillStacks: 0,
     logs: [],
     lastSave: Date.now(),
     created: Date.now(),
@@ -290,6 +303,8 @@ export function load(): GameState {
     pushLog(s, `闭关 ${Math.floor(dt).toLocaleString()} 日（离线按五成速度），得灵力 ${gain.toLocaleString()}。`, "info");
     checkMissions(s);
   }
+  // 离线期间丹炉若已毕，回档即结算
+  if (s.alch && Date.now() >= s.alch.until) resolveBrew(s);
   s.lastSave = Date.now();
   return s;
 }
@@ -299,6 +314,8 @@ export function tick(s: GameState, dtSec: number): void {
   s.days += dtSec;
   // 缓慢回气（满 10 秒回 1% 气血）
   s.hp = Math.min(maxHpOf(s), s.hp + (maxHpOf(s) / 10) * (dtSec / 10));
+  // 丹炉推进
+  if (s.alch && Date.now() >= s.alch.until) resolveBrew(s);
   // 野外：每秒按概率遭遇
   tryWildEncounter(s, undefined, dtSec);
 }
@@ -319,7 +336,14 @@ export function act(s: GameState): void {
     s.hp = maxHpOf(s); // 突破后气血全满
     pushLog(s, `功法精进，突破至【${stageLabel(s.realm, s.stage)}】！`, "good");
   } else {
-    const chance = Math.min(0.95, r.breakChance + m.breakBonus);
+    let chance = Math.min(0.95, r.breakChance + m.breakBonus);
+    let pillBonus = 0;
+    if (s.breakPillStacks > 0) {
+      const pill = PILLS.find((p) => p.effect === "break");
+      pillBonus = Math.min(s.breakPillStacks, 3) * (pill?.breakBonus ?? 0);
+      chance = Math.min(0.98, chance + pillBonus);
+      s.breakPillStacks -= 1; // 每次大突破消耗一层
+    }
     const roll = Math.random();
     const nxt = REALMS[s.realm + 1];
     if (roll < chance) {
@@ -327,7 +351,7 @@ export function act(s: GameState): void {
       s.stage = 1;
       s.hp = maxHpOf(s);
       s.lowKey = Math.min(100, s.lowKey + 5);
-      pushLog(s, `天劫已过，雷云散尽——恭喜突破至【${stageLabel(s.realm, s.stage)}】！寿元再增，低调值 +5。`, "break");
+      pushLog(s, `天劫已过，雷云散尽——恭喜突破至【${stageLabel(s.realm, s.stage)}】！${pillBonus ? `（破境丹助功 +${Math.round(pillBonus * 100)}%）` : ""}寿元再增，低调值 +5。`, "break");
     } else {
       const grave = Math.random() < 0.2;
       s.injuredUntil = Date.now() + INJURE_SEC * 1000;
@@ -372,6 +396,87 @@ export function stoneToSpirit(s: GameState, n: number): void {
   save(s);
 }
 
+// ===== M3：炼丹（药材 → 丹方 → 成功率 → 丹药）=====
+
+export function herbDef(id: string): HerbDef | undefined {
+  return HERBS.find((h) => h.id === id);
+}
+export function pillDef(id: string): PillDef | undefined {
+  return PILLS.find((p) => p.id === id);
+}
+export function alchProgress(s: GameState): { pct: number; left: number } {
+  if (!s.alch) return { pct: 0, left: 0 };
+  const p = pillDef(s.alch.pillId);
+  const total = (p?.brewSec ?? 1) * 1000;
+  const done = Math.min(Math.max(Date.now() - (s.alch.until - total), 0), total);
+  return { pct: total > 0 ? (done / total) * 100 : 100, left: Math.max(0, Math.ceil((s.alch.until - Date.now()) / 1000)) };
+}
+
+// 投炉炼丹：扣材料，计时开始（离线也推进，回档即结算）
+export function startBrew(s: GameState, pillId: string): void {
+  if (s.alch) {
+    pushLog(s, "丹炉已有一炉在炼，须待其毕。", "info");
+    return;
+  }
+  const p = pillDef(pillId);
+  if (!p) return;
+  for (const [hid, n] of Object.entries(p.recipe)) {
+    if ((s.inv[hid] ?? 0) < n) {
+      pushLog(s, `药材不足：【${herbDef(hid)?.name ?? hid}】需 ${n}，现 ${s.inv[hid] ?? 0}。`, "info");
+      return;
+    }
+  }
+  for (const [hid, n] of Object.entries(p.recipe)) {
+    s.inv[hid] -= n;
+    if (s.inv[hid] <= 0) delete s.inv[hid];
+  }
+  s.alch = { pillId, until: Date.now() + p.brewSec * 1000 };
+  pushLog(s, `炉火点燃，炼制【${p.name}】：约 ${p.brewSec} 息，成算 ${Math.round(p.chance * 100)}%。`, "info");
+  save(s);
+}
+
+// 丹毕结算：成功得丹；失败炸炉，未用材料折损
+function resolveBrew(s: GameState): void {
+  const a = s.alch;
+  if (!a) return;
+  s.alch = null;
+  const p = pillDef(a.pillId);
+  if (!p) return;
+  if (Math.random() < p.chance) {
+    s.inv[p.id] = (s.inv[p.id] ?? 0) + 1;
+    pushLog(s, `丹炉轻响，【${p.name}】炼成！`, "good");
+  } else {
+    // 炸炉：有概率挽回 1 份材料
+    if (Math.random() < 0.5) {
+      const hids = Object.keys(p.recipe);
+      const h = hids[rnd(0, hids.length - 1)];
+      s.inv[h] = (s.inv[h] ?? 0) + 1;
+      pushLog(s, `丹炉炸裂，烟气呛人——【${p.name}】炼制失败，幸而捞回【${herbDef(h)?.name ?? h}】1 份。`, "bad");
+    } else {
+      pushLog(s, `丹炉炸裂，烟气呛人——【${p.name}】炼制失败，材料尽焚。`, "bad");
+    }
+  }
+  save(s);
+}
+
+// 采买药材
+export function buyHerb(s: GameState, id: string): void {
+  if (s.enemy) {
+    pushLog(s, "战斗中无法采买。", "info");
+    return;
+  }
+  const h = herbDef(id);
+  if (!h) return;
+  if (s.stones < h.price) {
+    pushLog(s, `灵石不足（需 ${h.price}）。`, "info");
+    return;
+  }
+  s.stones -= h.price;
+  s.inv[id] = (s.inv[id] ?? 0) + 1;
+  pushLog(s, `购得【${h.name}】×1（灵石 -${h.price}）。`, "info");
+  save(s);
+}
+
 // ===== M2：物品 =====
 
 export function itemDef(id: string): ItemDef | undefined {
@@ -396,26 +501,50 @@ export function buyItem(s: GameState, id: string): void {
   save(s);
 }
 
-// 使用物品：战斗外可用回灵丹/聚灵丹；灵甲符仅战斗中生效
+// 使用物品：战斗外可用回灵丹/聚灵丹；灵甲符仅战斗中生效；炼制的丹药按丹方效果
 export function useItem(s: GameState, id: string): void {
   const it = itemDef(id);
-  if (!it || !s.inv[id]) return;
-  if (it.combatOnly) {
+  const pill = PILLS.find((p) => p.id === id);
+  if ((!it && !pill) || !s.inv[id]) return;
+  if (it?.combatOnly) {
     if (!s.enemy) {
       pushLog(s, "灵甲符需面对敌人时方可祭出。", "info");
       return;
     }
     s.armorTurns += it.blockTurns ?? 1;
   }
-  if (it.healPct) {
+  if (it?.healPct) {
     const heal = Math.round(maxHpOf(s) * it.healPct);
     s.hp = Math.min(maxHpOf(s), s.hp + heal);
     pushLog(s, `服下【${it.name}】，气血 +${heal.toLocaleString()}。`, "good");
   }
-  if (it.spirit) {
+  if (it?.spirit) {
     const gain = Math.round(maxHpOf(s) * it.spirit);
     s.spirit += gain;
     pushLog(s, `炼化【${it.name}】，灵力 +${gain.toLocaleString()}。`, "good");
+  }
+  // M3：炼制的丹药（回春/聚气/破境/凝气）
+  if (pill) {
+    if (pill.effect === "heal" && pill.healPct) {
+      const heal = Math.round(maxHpOf(s) * pill.healPct);
+      s.hp = Math.min(maxHpOf(s), s.hp + heal);
+      pushLog(s, `服下【${pill.name}】，气血 +${heal.toLocaleString()}。`, "good");
+    } else if (pill.effect === "spirit" && pill.spiritMul) {
+      const gain = Math.round(maxHpOf(s) * pill.spiritMul);
+      s.spirit += gain;
+      pushLog(s, `炼化【${pill.name}】，灵力 +${gain.toLocaleString()}。`, "good");
+    } else if (pill.effect === "break") {
+      if (s.breakPillStacks >= 3) {
+        pushLog(s, "丹力已满（3 层），破境丹须待下次突破后再服。", "info");
+        return;
+      }
+      s.breakPillStacks += 1;
+      pushLog(s, `服下【${pill.name}】，丹力入体——下次大境界突破成功率 +${Math.round((pill.breakBonus ?? 0) * 100)}%（已叠 ${s.breakPillStacks} 层）。`, "good");
+    } else if (pill.effect === "gather" && pill.gatherMul && pill.gatherSec) {
+      s.gatherUntil = Date.now() + pill.gatherSec * 1000;
+      s.gatherMul = pill.gatherMul;
+      pushLog(s, `运起【${pill.name}】药力，${pill.gatherSec}息内修炼速度 +${Math.round(pill.gatherMul * 100)}%。`, "good");
+    }
   }
   s.inv[id] -= 1;
   if (s.inv[id] <= 0) delete s.inv[id];
@@ -509,6 +638,14 @@ function winFight(s: GameState, edef: EnemyDef): void {
     const drop = ITEMS[rnd(0, ITEMS.length - 1)];
     s.inv[drop.id] = (s.inv[drop.id] ?? 0) + 1;
     pushLog(s, `敌尸中翻出【${drop.name}】×1。`, "good");
+  }
+  // M3：药材掉落（危险地掉得更多）
+  const hMul = 1 + (currentNode(s).dropMul ?? 0) * 0.5;
+  for (const h of HERBS) {
+    if (Math.random() < h.drop * hMul) {
+      s.inv[h.id] = (s.inv[h.id] ?? 0) + 1;
+      pushLog(s, `拾得药材【${h.name}】×1。`, "good");
+    }
   }
   // 秘境：进入下一房
   if (s.dungeon) {

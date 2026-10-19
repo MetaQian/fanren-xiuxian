@@ -171,6 +171,53 @@ export const ITEMS: ItemDef[] = [
   { id: "armor", name: "灵甲符", price: 100, blockPct: 0.5, blockTurns: 3, combatOnly: true, desc: "接下来 3 次受击 -50%（仅战斗中）。" },
 ];
 
+// ===== M3：炼丹（仿一念逍遥 random_drug：药材→丹方→成功率→功效）=====
+export interface HerbDef {
+  id: string;
+  name: string;
+  tier: number; // 推荐境界（展示）
+  price: number; // 商行售价（灵石）
+  drop: number; // 战后掉率（基础）
+  desc: string;
+}
+export const HERBS: HerbDef[] = [
+  { id: "herb_yuteng", name: "玉藤草", tier: 0, price: 15, drop: 0.3, desc: "七玄后山常见灵草，炼药引子。" },
+  { id: "herb_linglu", name: "灵露草", tier: 1, price: 45, drop: 0.14, desc: "晨露中孕育，灵气充沛。" },
+  { id: "herb_riyan", name: "日炎花", tier: 2, price: 120, drop: 0.07, desc: "向阳而生的烈焰之蕊，性烈。" },
+  { id: "herb_leisui", name: "雷髓果", tier: 3, price: 300, drop: 0.035, desc: "雷泽深处结的果实，蕴含雷威。" },
+];
+
+export interface PillDef {
+  id: string;
+  name: string;
+  recipe: Record<string, number>; // 药材 → 数量
+  brewSec: number; // 炼制耗时（息，可离线）
+  chance: number; // 成功率（失败炸炉，材料有折损）
+  effect: "heal" | "spirit" | "break" | "gather";
+  breakBonus?: number; // effect=break：下次大突破成功率加成
+  spiritMul?: number; // effect=spirit：灵力收益 = maxHp × 该值
+  healPct?: number; // effect=heal
+  gatherMul?: number; // effect=gather：修炼加速
+  gatherSec?: number; // effect=gather：加速时长
+  desc: string;
+}
+export const PILLS: PillDef[] = [
+  { id: "pill_huichun", name: "回春丹", recipe: { herb_yuteng: 2 }, brewSec: 3, chance: 0.95, effect: "heal", healPct: 0.6, desc: "回复 60% 气血。" },
+  { id: "pill_juqi", name: "聚气丹", recipe: { herb_yuteng: 1, herb_linglu: 1 }, brewSec: 8, chance: 0.8, effect: "spirit", spiritMul: 0.8, desc: "炼化得灵力（随境界增长）。" },
+  { id: "pill_pojing", name: "破境丹", recipe: { herb_linglu: 2, herb_riyan: 1 }, brewSec: 20, chance: 0.6, effect: "break", breakBonus: 0.15, desc: "服后下次大境界突破成功率 +15%（可叠 3 层）。" },
+  { id: "pill_ningqi", name: "凝气丹", recipe: { herb_riyan: 1, herb_leisui: 1 }, brewSec: 30, chance: 0.45, effect: "gather", gatherMul: 0.3, gatherSec: 60, desc: "60 息内修炼速度 +30%。" },
+];
+export const ALCH_ICONS: Record<string, string> = {
+  herb_yuteng: "🌿",
+  herb_linglu: "💧",
+  herb_riyan: "🌺",
+  herb_leisui: "⚡",
+  pill_huichun: "💊",
+  pill_juqi: "💠",
+  pill_pojing: "🔥",
+  pill_ningqi: "🌀",
+};
+
 export interface EnemyDef {
   id: string;
   name: string;

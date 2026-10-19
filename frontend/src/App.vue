@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { DUNGEON, ITEMS, METHODS, MISSIONS, REALMS, SPELLS, MAP_NODES, type MapNodeDef } from "./game/data";
+import { DUNGEON, ITEMS, HERBS, PILLS, METHODS, MISSIONS, REALMS, SPELLS, MAP_NODES, type MapNodeDef, type HerbDef, type PillDef } from "./game/data";
 import {
   type GameState,
   type LogEntry,
   act,
+  alchProgress,
+  buyHerb,
   buyItem,
   castSpell,
   checkMissions,
@@ -30,6 +32,7 @@ import {
   STONE_TO_SPIRIT,
   MEDITATE_MUL,
   stoneToSpirit,
+  startBrew,
   tick,
   useItem,
 } from "./game/state";
@@ -136,6 +139,38 @@ function doMeditate() {
 }
 // 入定剩余秒数（模板里取不到 Date，用函数算）
 const medLeft = () => Math.max(0, Math.ceil((s.value.meditateUntil - Date.now()) / 1000));
+
+// ===== M3：炼丹 =====
+const alchBrewPill = (): PillDef | null =>
+  s.value.alch ? PILLS.find((p) => p.id === s.value.alch!.pillId) ?? null : null;
+const alchPct = () => alchProgress(s.value).pct;
+const alchLeft = () => alchProgress(s.value).left;
+function doBrew(id: string) {
+  startBrew(s.value, id);
+  flushToasts();
+}
+function buyH(id: string) {
+  buyHerb(s.value, id);
+  flushToasts();
+}
+function invN(id: string): number {
+  return s.value.inv[id] ?? 0;
+}
+function recipeText(p: PillDef): string {
+  return Object.entries(p.recipe)
+    .map(([hid, n]) => `【${HERBS.find((h) => h.id === hid)?.name ?? hid}】×${n}`)
+    .join("＋");
+}
+function pillEffect(p: PillDef): string {
+  if (p.effect === "heal" && p.healPct) return `服用回 ${Math.round(p.healPct * 100)}% 气血`;
+  if (p.effect === "spirit" && p.spiritMul) return `炼化灵力 +${Math.round(p.spiritMul * 100)}% 上限`;
+  if (p.effect === "break") return `下次大突破成功率 +${Math.round((p.breakBonus ?? 0) * 100)}%（可叠3层）`;
+  if (p.effect === "gather") return `修炼速度 +${Math.round((p.gatherMul ?? 0) * 100)}%（${p.gatherSec}息）`;
+  return p.desc;
+}
+function herbOf(h: HerbDef): string {
+  return h.realmReq > 0 ? `筑基后常见` : h.realmReq < 0 ? "" : "常见";
+}
 // ===== 图标点缀 =====
 const REALM_ICONS = ["🌫️", "🏔️", "⚛️", "🐲", "🌟"]; // 按大境界序号
 const realmIco = () => REALM_ICONS[s.value.realm] ?? "🌫️";
@@ -156,6 +191,16 @@ const ICONS: Record<string, string> = {
   beastking: "🐯",
   demonlord: "💀",
   yuanshui: "☠️",
+  // M3 丹药
+  pill_huichun: "💊",
+  pill_juqi: "🧪",
+  pill_pojing: "🔥",
+  pill_ningshu: "🌀",
+  // M3 药材
+  herb_yuteng: "🌿",
+  herb_linglu: "💧",
+  herb_riyan: "🌺",
+  herb_leisui: "⚡",
 };
 const ico = (id?: string) => (id ? ICONS[id] ?? "✦" : "✦");
 const toastIco = (k: string) => (k === "break" ? "⚡" : k === "good" ? "🌿" : k === "bad" ? "🗡️" : "📜");
@@ -235,9 +280,11 @@ const canCast = (id: string) => {
   return !!s.value.enemy && s.value.realm >= sp.realm && s.value.spirit >= sp.cost;
 };
 
-// 背包
+// 背包（含炼制的丹药）
 const invEntries = () =>
-  Object.entries(s.value.inv).filter(([, n]) => n > 0).map(([id, n]) => ({ def: itemDef(id)!, n }));
+  Object.entries(s.value.inv)
+    .filter(([, n]) => n > 0)
+    .map(([id, n]) => ({ def: itemDef(id) ?? PILLS.find((p) => p.id === id)!, n }));
 
 // ===== 场景地图 =====
 const mapOpen = ref(false);
@@ -414,8 +461,44 @@ onBeforeUnmount(() => {
           <button class="sp-go" :disabled="stoneCount() <= 0" @click="doStoneToSpirit">确认化灵</button>
         </div>
       </div>
+      <!-- M3：炼丹炉（药材 → 丹药，成功率仿一念逍遥 random_drug） -->
+      <div class="stone-panel alch-panel">
+        <p class="sp-title">⚗️ 炼丹炉（战后拾药，商行亦可购）</p>
+        <div class="sp-row" v-if="s.alch && alchBrewPill()">
+          <span class="sp-preview">
+            炉中炼 <b>{{ ico(s.alch.pillId) }} {{ alchBrewPill()!.name }}</b>
+            <em class="stat">余 {{ alchLeft() }} 息</em>
+          </span>
+          <div class="bar alch-bar"><div class="fill alch-fill" :style="{ width: alchPct() + '%' }"></div></div>
+        </div>
+        <div v-for="p in PILLS" :key="p.id" class="recipe">
+          <div class="recipe-top">
+            <b>{{ ico(p.id) }} {{ p.name }}</b>
+            <span class="recipe-meta">成算 {{ Math.round(p.chance * 100) }}% · 约 {{ p.brewSec }} 息</span>
+            <span class="recipe-meta">持有 ×{{ invN(p.id) }}</span>
+          </div>
+          <div class="recipe-bottom">
+            <span class="dim recipe-need">{{ recipeText(p) }}</span>
+            <span class="recipe-fx">{{ pillEffect(p) }}</span>
+            <button
+              class="mini sp-go"
+              :disabled="!!s.alch"
+              :title="s.alch ? '丹炉使用中' : ''"
+              @click="doBrew(p.id)"
+            >
+              {{ s.alch ? "炉火未熄" : "投炉炼制" }}
+            </button>
+          </div>
+        </div>
+        <div class="herb-row">
+          <span v-for="h in HERBS" :key="h.id" class="herb-chip" :title="h.desc">
+            {{ ico(h.id) }} {{ h.name }} ×{{ invN(h.id) }}
+            <button class="mini herb-buy" :disabled="s.stones < h.price" @click="buyH(h.id)">购{{ h.price }}石</button>
+          </span>
+        </div>
+      </div>
       <p v-if="!isFinal() && isTopStage() && !s.enemy" class="warn">
-        突破成功率 {{ Math.round(breakChance() * 100) }}%（功法加成已计入）—— 失败恐遭天劫反噬
+        突破成功率 {{ Math.round(breakChance() * 100) }}%（功法加成已计入{{ s.breakPillStacks > 0 ? `，破境丹 ${s.breakPillStacks} 层待用 +${s.breakPillStacks * 15}%` : "" }}）—— 失败恐遭天劫反噬
       </p>
       <p v-if="!canDungeon() && !s.enemy" class="dim">
         秘境之门紧闭：需修至{{ stageLabel(s.realm, 3) }}方可踏入{{ DUNGEON.name }}。
