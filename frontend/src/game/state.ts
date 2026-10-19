@@ -1,8 +1,11 @@
 import {
+  AFFIXES,
   DUNGEON,
   ENEMIES,
+  EQUIP_SLOTS,
   HERBS,
   ITEMS,
+  MATS,
   MAP_HOME,
   MAP_NODES,
   METHODS,
@@ -10,6 +13,9 @@ import {
   PILLS,
   PETS,
   PET_BLOOD,
+  QUALITIES,
+  KILL_REWARDS,
+  FORGE_RECIPES,
   SPELLS,
   type EnemyDef,
   type HerbDef,
@@ -19,6 +25,7 @@ import {
   type PetDef,
   type PillDef,
   type SpellDef,
+  type EquipItem,
   CN_NUM,
   REALMS,
   SIGN,
@@ -69,6 +76,15 @@ export interface GameState {
   petStoneAcc: number; // 灵兽灵石被动产出累加器（<1 时攒着）
   signDay: number; // 签到进度（1-7，0=本轮未签）
   signLastDay: string; // 上次签到日期（本地 YYYY-MM-DD，同日不重复）
+  auto: boolean; // M6.1：挂机猎妖开关（自动寻敌 + 自动出手 + 自动拾取）
+  kills: number; // 累计斩妖数
+  killDay: string; // 当日计数日期
+  killToday: number; // 今日斩妖数
+  killTier: number; // 今日已领到第几档斩妖赏（0-3）
+  mats: Record<string, number>; // 锻造材料（灵矿石/妖核）
+  equip: Record<string, EquipItem | null>; // 已穿戴装备（slot → 装备）
+  equipBag: EquipItem[]; // 行囊里的装备（未穿戴）
+  autoAtkAcc: number; // 自动出手累加器（秒）
   logs: LogEntry[];
   lastSave: number;
   created: number;
@@ -102,13 +118,15 @@ export function speedOf(s: GameState): number {
   if (Date.now() < s.injuredUntil) v *= 0.5;
   const node = currentNode(s);
   if (node?.speedBonus) v *= 1 + node.speedBonus; // 宝地加成
+  v *= 1 + equipSum(s, "spdPct") / 100; // 装备词条：御风
   return v;
 }
 
-// 气血 / 攻击：随境界与小境界成长
+// 气血 / 攻击：随境界与小境界成长（+ 装备词条）
 export function maxHpOf(s: GameState): number {
   const r = REALMS[s.realm];
-  return Math.round((100 + 10 * (s.realm + 1)) * r.speed * (1 + 0.15 * (s.stage - 1)));
+  const base = (100 + 10 * (s.realm + 1)) * r.speed * (1 + 0.15 * (s.stage - 1));
+  return Math.round(base * (1 + equipSum(s, "hpPct") / 100) + equipFlat(s, "hp"));
 }
 
 // ===== M2.5：场景地图 =====
@@ -185,7 +203,118 @@ export function atkOf(s: GameState): number {
     const pd = PETS.find((x) => x.id === p.id);
     if (pd) v += maxHpOf(s) * pd.atk[p.blood - 1]; // 灵兽助战
   }
+  return Math.round(v * (1 + equipSum(s, "atkPct") / 100) + equipFlat(s, "atk"));
+}
+
+// ===== M6.1：装备（部位穿戴 + 词条 + 锻造）=====
+
+function equipFlat(s: GameState, stat: "atk" | "hp" | "speed" | "dodge"): number {
+  let v = 0;
+  for (const e of Object.values(s.equip)) if (e) v += e.base[stat];
+  return v;
+}
+function equipSum(s: GameState, affixId: string): number {
+  let v = 0;
+  for (const e of Object.values(s.equip))
+    if (e) for (const a of e.affixes) if (a.id === affixId) v += a.val;
+  return v;
+}
+
+// 装备战力贡献（供左上战力显示）
+export function equipPower(s: GameState): number {
+  let v = 0;
+  for (const e of Object.values(s.equip)) {
+    if (!e) continue;
+    v += e.base.atk * 5 + e.base.hp + e.base.speed * 10 + e.base.dodge * 20;
+    for (const a of e.affixes) v += a.val * 12;
+    v += QUALITIES[e.quality].mult * 40;
+  }
   return Math.round(v);
+}
+
+// 锻造：扣材料 → 随机品质装备（主属性按部位 + 随机词条）
+export function forgeEquip(s: GameState, slotId: string, quality: number): void {
+  if (s.enemy) {
+    pushLog(s, "生死搏杀之中，无心得炼器。", "info");
+    return;
+  }
+  const slot = EQUIP_SLOTS.find((x) => x.id === slotId);
+  if (!slot) return;
+  const q = Math.max(0, Math.min(4, Math.floor(quality)));
+  const r = FORGE_RECIPES[q];
+  if ((s.mats.ore ?? 0) < r.ore || (s.mats.essence ?? 0) < r.essence) {
+    pushLog(
+      s,
+      `材料不足：锻【${QUALITIES[q].name}${slot.name}】需灵矿石 ${r.ore}${r.essence ? `、妖核 ${r.essence}` : ""}（现 ${s.mats.ore ?? 0} 石 / ${s.mats.essence ?? 0} 核）。`,
+      "info",
+    );
+    return;
+  }
+  s.mats.ore -= r.ore;
+  s.mats.essence -= r.essence;
+  // 主属性基数：按品质倍率 + 当前境界
+  const base = maxHpOf(s) * 0.08 * QUALITIES[q].mult;
+  const item: EquipItem = {
+    uid: Date.now() % 100000000 + Math.floor(Math.random() * 999),
+    slot: slot.id,
+    name: slot.names[q],
+    quality: q,
+    base: { atk: 0, hp: 0, speed: 0, dodge: 0 },
+    affixes: [],
+  };
+  item.base[slot.main] = Math.round(base);
+  // 随机词条（不重复）
+  const pool = [...AFFIXES];
+  const n = Math.min(r.affixes, 4 + Math.floor(Math.random() * 2) + q);
+  for (let i = 0; i < n && pool.length; i++) {
+    const idx = rnd(0, pool.length - 1);
+    const a = pool.splice(idx, 1)[0];
+    const span = a.max - a.min;
+    item.affixes.push({ id: a.id, val: a.min + Math.round((Math.random() * span) * (1 + q * 0.35)) });
+  }
+  s.equipBag.push(item);
+  pushLog(
+    s,
+    `炉火纯青——锻造出【${QUALITIES[q].name}·${item.name}】${item.affixes.length ? `（${item.affixes.length} 词条）` : ""}，收入行囊。`,
+    "good",
+  );
+  save(s);
+}
+
+// 穿戴行囊里的装备（同部位自动替换，旧装备回行囊）
+export function wearEquip(s: GameState, uid: number): void {
+  const i = s.equipBag.findIndex((e) => e.uid === uid);
+  if (i < 0) return;
+  const item = s.equipBag[i];
+  s.equipBag.splice(i, 1);
+  const old = s.equip[item.slot];
+  s.equip[item.slot] = item;
+  if (old) s.equipBag.push(old);
+  const slot = EQUIP_SLOTS.find((x) => x.id === item.slot);
+  pushLog(s, `换上【${QUALITIES[item.quality].name}·${item.name}】${old ? `（卸下${old.name}）` : ""}。`, "good");
+  save(s);
+}
+
+// 卸下已穿戴装备
+export function unwearEquip(s: GameState, slotId: string): void {
+  const e = s.equip[slotId];
+  if (!e) return;
+  delete s.equip[slotId];
+  s.equipBag.push(e);
+  pushLog(s, `卸下【${e.name}】，收入行囊。`, "info");
+  save(s);
+}
+
+// 出售装备（按品质折灵石）
+export function sellEquip(s: GameState, uid: number): void {
+  const i = s.equipBag.findIndex((e) => e.uid === uid);
+  if (i < 0) return;
+  const e = s.equipBag[i];
+  s.equipBag.splice(i, 1);
+  const price = Math.round(maxHpOf(s) * 0.05 * QUALITIES[e.quality].mult);
+  s.stones += price;
+  pushLog(s, `将【${e.name}】售与商行，得灵石 ${price}。`, "info");
+  save(s);
 }
 
 // ===== M5.7：每日签到（7 天一循环，第 7 天重赏；断签则从第 1 天重起）=====
@@ -301,6 +430,15 @@ export function newGame(): GameState {
     petStoneAcc: 0,
     signDay: 0,
     signLastDay: "",
+    auto: true,
+    kills: 0,
+    killDay: localDayKey(),
+    killToday: 0,
+    killTier: 0,
+    mats: {},
+    equip: {},
+    equipBag: [],
+    autoAtkAcc: 0,
     logs: [],
     lastSave: Date.now(),
     created: Date.now(),
@@ -394,6 +532,51 @@ export function tick(s: GameState, dtSec: number): void {
   }
   // 野外：每秒按概率遭遇
   tryWildEncounter(s, undefined, dtSec);
+  // M6.1：挂机猎妖（自动出手 / 自动寻敌；重伤时暂停，避免无限送死）
+  if (s.auto && !s.dungeon && !(Date.now() < s.injuredUntil)) {
+    const nd = currentNode(s);
+    if (s.enemy) {
+      // 自动出手：每息一次（徒手平斩不耗灵力，灵力留给突破；手动战斗才放法术）
+      s.autoAtkAcc += dtSec;
+      while (s.autoAtkAcc >= 1 && s.enemy) {
+        s.autoAtkAcc -= 1;
+        basicAttack(s);
+      }
+    } else if (nd.kind === "wild" && nd.enemies?.length) {
+      // 自动寻敌：在野外每 2 息刷一只（直接生成，不走概率遭遇）
+      s.autoAtkAcc += dtSec * 0.5;
+      if (s.autoAtkAcc >= 1) {
+        s.autoAtkAcc = 0;
+        const pool = ENEMIES.filter((e) => nd.enemies!.includes(e.id) && e.realms.includes(s.realm));
+        const def = pool.length ? pool[rnd(0, pool.length - 1)] : ENEMIES[0];
+        spawnEnemy(s, def);
+        pushLog(s, `${nd.name}中杀机又起——【${def.name}】扑来！`, def.boss ? "break" : "info");
+      }
+    } else {
+      s.autoAtkAcc = 0;
+    }
+  }
+}
+
+// 徒手攻击（自动战斗兜底，不耗灵力）
+function basicAttack(s: GameState): void {
+  if (!s.enemy) return;
+  const e = s.enemy;
+  const edef = enemyOf(s)!;
+  let dmg = Math.round(atkOf(s) * 0.5 * (0.9 + Math.random() * 0.2));
+  const crit = Math.random() < 0.05 + equipSum(s, "critPct") / 100;
+  if (crit) dmg = Math.round(dmg * 2);
+  e.hp -= dmg;
+  if (crit) pushLog(s, `平斩【${edef.name}】，会心！造成 ${dmg} 伤害。`, "info");
+  // 吸血词条
+  const ls = equipSum(s, "lifeSteal") / 100;
+  if (ls > 0) s.hp = Math.min(maxHpOf(s), s.hp + Math.round(dmg * ls));
+  if (e.hp <= 0) {
+    winFight(s, edef);
+    return;
+  }
+  enemyTurn(s, edef);
+  save(s);
 }
 
 // 修炼 / 突破
@@ -741,6 +924,12 @@ export function castSpell(s: GameState, id: string): void {
 // 敌人回合
 function enemyTurn(s: GameState, edef: EnemyDef): void {
   if (!s.enemy) return;
+  // 闪身词条：概率完全闪避
+  const dodge = equipSum(s, "dodgePct") / 100;
+  if (Math.random() < dodge) {
+    pushLog(s, `身形一晃，避开了${edef.name}的反击（闪避）。`, "good");
+    return;
+  }
   let dmg = Math.round(s.enemy.atk * (0.85 + Math.random() * 0.3));
   if (s.bellActive) {
     dmg = Math.round(dmg * 0.4);
@@ -770,7 +959,28 @@ function winFight(s: GameState, edef: EnemyDef): void {
   const rest = Math.round(maxHpOf(s) * 0.28);
   s.hp = Math.min(maxHpOf(s), s.hp + rest);
   if (edef.boss) s.karma += 1;
-  pushLog(s, `斩敌【${edef.name}】！获灵石 ${stoneGain}，灵力 +${spiritGain.toLocaleString()}，调息气血 +${rest}。`, "good");
+  // M6.1：斩妖计数 + 材料掉落（灵矿石/妖核，锻造原料）
+  s.kills += 1;
+  if (s.killDay !== localDayKey()) {
+    s.killDay = localDayKey();
+    s.killToday = 0;
+    s.killTier = 0;
+  }
+  s.killToday += 1;
+  const oreGain = rnd(1, 2) + Math.floor(s.realm / 2) + (edef.boss ? 3 : 0);
+  s.mats.ore = (s.mats.ore ?? 0) + oreGain;
+  let essGain = 0;
+  if (Math.random() < (edef.boss ? 0.9 : 0.12 + s.realm * 0.02)) essGain = edef.boss ? rnd(2, 4) : 1;
+  if (essGain > 0) s.mats.essence = (s.mats.essence ?? 0) + essGain;
+  pushLog(s, `斩敌【${edef.name}】！获灵石 ${stoneGain}，灵力 +${spiritGain.toLocaleString()}，灵矿石 +${oreGain}${essGain ? `、妖核 +${essGain}` : ""}，调息气血 +${rest}。`, "good");
+  // 每日斩妖赏（达档自动发放，日切重置）
+  while (s.killTier < KILL_REWARDS.length && s.killToday >= KILL_REWARDS[s.killTier].n) {
+    const kr = KILL_REWARDS[s.killTier];
+    s.stones += kr.stones;
+    s.spirit += kr.spirit;
+    s.killTier += 1;
+    pushLog(s, `今日斩妖达 ${kr.n} 头——赏灵石 ${kr.stones}、灵力 ${kr.spirit.toLocaleString()}。`, "good");
+  }
   if (Math.random() < edef.itemChance) {
     const drop = ITEMS[rnd(0, ITEMS.length - 1)];
     s.inv[drop.id] = (s.inv[drop.id] ?? 0) + 1;

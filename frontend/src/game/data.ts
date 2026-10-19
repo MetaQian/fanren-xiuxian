@@ -405,4 +405,72 @@ export const SIGN = {
   ],
 };
 
+// ===== M6.1：锻造材料（灵石矿 + 妖核，对标一念逍遥 矿石+妖核 掉落）=====
+export const MATS: { id: string; name: string; icon: string; desc: string }[] = [
+  { id: "ore", name: "灵矿石", icon: "⛏️", desc: "打怪所得，锻造装备的根基。" },
+  { id: "essence", name: "妖核", icon: "🔮", desc: "妖兽精魄所凝，高阶锻造必需。" },
+];
+
+// ===== M6.1：装备锻造（部位/品质/词条，对标一念逍遥 装备+词条）=====
+export interface AffixDef {
+  id: string;
+  name: string;
+  min: number;
+  max: number;
+  fmt: (v: number) => string;
+}
+export const AFFIXES: AffixDef[] = [
+  { id: "atkPct", name: "锋芒", min: 3, max: 12, fmt: (v) => `攻击 +${v}%` },
+  { id: "hpPct", name: "固元", min: 3, max: 12, fmt: (v) => `气血 +${v}%` },
+  { id: "spdPct", name: "御风", min: 2, max: 8, fmt: (v) => `修炼速度 +${v}%` },
+  { id: "critPct", name: "破妄", min: 3, max: 10, fmt: (v) => `会心 +${v}%` },
+  { id: "lifeSteal", name: "噬血", min: 2, max: 8, fmt: (v) => `吸血 +${v}%` },
+  { id: "dodgePct", name: "闪身", min: 2, max: 8, fmt: (v) => `闪避 +${v}%` },
+];
+export interface EquipItem {
+  uid: number;
+  slot: string;
+  name: string;
+  quality: number; // 0-4
+  base: { atk: number; hp: number; speed: number; dodge: number };
+  affixes: { id: string; val: number }[];
+}
+export const EQUIP_SLOTS: {
+  id: string;
+  name: string;
+  icon: string;
+  main: "atk" | "hp" | "speed" | "dodge";
+  names: [string, string, string, string, string];
+}[] = [
+  { id: "weapon", name: "兵刃", icon: "⚔️", main: "atk", names: ["锈铁剑", "青锋刀", "寒月剑", "镇妖刀", "破虚剑"] },
+  { id: "robe", name: "法袍", icon: "🥋", main: "hp", names: ["粗布衣", "云纹袍", "玄鳞甲", "护心袍", "道体衣"] },
+  { id: "boots", name: "云靴", icon: "👢", main: "speed", names: ["麻布靴", "踏风靴", "凌波鞋", "追云靴", "御天履"] },
+  { id: "ring", name: "佩戒", icon: "💍", main: "dodge", names: ["铜戒", "灵纹戒", "避尘戒", "化虚戒", "遁世戒"] },
+  { id: "jade", name: "玉佩", icon: "📿", main: "atk", names: ["残玉", "青玉佩", "养魂玉", "聚灵佩", "道纹玉"] },
+  { id: "hat", name: "巾冠", icon: "🎩", main: "hp", names: ["麻巾", "青纶巾", "玄铁冠", "紫金冠", "道君冠"] },
+];
+export const QUALITIES = [
+  { name: "凡品", cls: "q0", mult: 1 },
+  { name: "灵品", cls: "q1", mult: 1.5 },
+  { name: "玄品", cls: "q2", mult: 2.2 },
+  { name: "地品", cls: "q3", mult: 3.2 },
+  { name: "道品", cls: "q4", mult: 4.6 },
+];
+
+// 锻造配方（品质越高越耗材料；妖核是硬门槛）
+export const FORGE_RECIPES = [
+  { ore: 10, essence: 0, affixes: 1 },
+  { ore: 25, essence: 2, affixes: 1 },
+  { ore: 60, essence: 6, affixes: 2 },
+  { ore: 140, essence: 15, affixes: 3 },
+  { ore: 300, essence: 40, affixes: 4 },
+];
+
+// 每日斩妖奖励（累计当日至阈值即领，日切重置）
+export const KILL_REWARDS = [
+  { n: 10, stones: 80, spirit: 500 },
+  { n: 50, stones: 400, spirit: 2500 },
+  { n: 100, stones: 1200, spirit: 8000 },
+];
+
 export const MAP_HOME = "qixuan"; // 出生 / 默认地点

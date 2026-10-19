@@ -1753,3 +1753,226 @@ footer .reset:hover {
     font-size: 34px;
   }
 }
+
+/* ===== M6.1：挂机猎妖开关 + 斩妖赏 ===== */
+.auto-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.auto-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px 7px 8px;
+  border: 1px solid rgba(217, 180, 120, 0.35);
+  border-radius: 999px;
+  background: rgba(20, 24, 34, 0.8);
+  color: #cdd3e0;
+  cursor: pointer;
+  font-size: 12px;
+  letter-spacing: 1px;
+  transition: all 0.2s;
+}
+.auto-switch .auto-knob {
+  width: 30px;
+  height: 16px;
+  border-radius: 999px;
+  background: #3a4152;
+  position: relative;
+  transition: background 0.2s;
+  flex: none;
+}
+.auto-switch .auto-knob::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #98a1b5;
+  transition: all 0.2s;
+}
+.auto-switch.on {
+  border-color: rgba(255, 176, 82, 0.8);
+  background: rgba(60, 40, 16, 0.55);
+  color: #ffd9a0;
+}
+.auto-switch.on .auto-knob {
+  background: #b8742a;
+}
+.auto-switch.on .auto-knob::after {
+  left: 16px;
+  background: #ffd9a0;
+}
+.auto-kill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #aab2c5;
+}
+.auto-kill b {
+  color: #ffd9a0;
+  font-size: 13px;
+}
+.ak-tiers {
+  display: inline-flex;
+  gap: 4px;
+}
+.ak-tiers em {
+  font-style: normal;
+  font-size: 10px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #7d8598;
+}
+.ak-tiers em.got {
+  border-color: rgba(140, 220, 140, 0.6);
+  color: #9fe09f;
+  background: rgba(40, 80, 40, 0.3);
+}
+
+/* ===== M6.1：法器页 ===== */
+.qi-mats {
+  font-style: normal;
+  font-size: 11px;
+  color: #9fb0d8;
+  float: right;
+  margin-top: 4px;
+}
+.qi-intro {
+  font-size: 11px;
+  margin: 4px 0 10px;
+}
+.equip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.equip-slot {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 8px;
+  background: rgba(16, 20, 30, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 84px;
+}
+.equip-slot.empty {
+  opacity: 0.6;
+  border-style: dashed;
+}
+.equip-slot .es-name {
+  font-size: 12px;
+  line-height: 1.4;
+}
+.equip-slot .es-base {
+  font-size: 10px;
+  color: #8b93a7;
+}
+.es-affix {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.es-affix li {
+  font-size: 10px;
+  color: #9fd6ff;
+}
+/* 品质色（q0 凡-灰 q1 灵-蓝 q2 玄-紫 q3 地-橙 q4 道-金） */
+.q0 { border-color: rgba(160, 168, 185, 0.5) !important; }
+.q0 .es-name, .bag-item.q0 b { color: #c3c9d8; }
+.q1 { border-color: rgba(100, 160, 255, 0.55) !important; }
+.q1 .es-name, .bag-item.q1 b { color: #8ec2ff; }
+.q2 { border-color: rgba(180, 120, 255, 0.55) !important; }
+.q2 .es-name, .bag-item.q2 b { color: #c79bff; }
+.q3 { border-color: rgba(255, 160, 60, 0.6) !important; }
+.q3 .es-name, .bag-item.q3 b { color: #ffb066; }
+.q4 { border-color: rgba(255, 210, 90, 0.75) !important; }
+.q4 .es-name, .bag-item.q4 b { color: #ffd970; text-shadow: 0 0 8px rgba(255, 200, 80, 0.4); }
+
+.forge-panel {
+  border: 1px solid rgba(255, 176, 82, 0.25);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 12px;
+  background: rgba(30, 22, 14, 0.4);
+}
+.forge-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 0;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+}
+.forge-row:last-child {
+  border-bottom: none;
+}
+.fg-slot {
+  width: 52px;
+  font-size: 11px;
+  color: #cdd3e0;
+  flex: none;
+}
+.fg-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+  padding: 4px 8px;
+}
+.fg-btn small {
+  font-size: 9px;
+  opacity: 0.75;
+}
+.bag-panel {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(16, 20, 30, 0.4);
+}
+.bag-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.bag-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: rgba(10, 13, 20, 0.5);
+  font-size: 11px;
+  flex-wrap: wrap;
+}
+.bag-item b {
+  font-size: 11px;
+}
+.bi-affix {
+  color: #9fd6ff;
+  font-size: 10px;
+  flex: 1;
+  min-width: 120px;
+}
+@media (max-width: 480px) {
+  .equip-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

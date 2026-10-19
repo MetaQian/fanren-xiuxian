@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from "vue";
-import { DUNGEON, ITEMS, HERBS, PILLS, PETS, PET_BLOOD, METHODS, MISSIONS, REALMS, SPELLS, MAP_NODES, SIGN, type MapNodeDef, type HerbDef, type PillDef } from "./game/data";
+import { DUNGEON, ITEMS, HERBS, PILLS, PETS, PET_BLOOD, METHODS, MISSIONS, REALMS, SPELLS, MAP_NODES, SIGN, MATS, EQUIP_SLOTS, QUALITIES, AFFIXES, FORGE_RECIPES, KILL_REWARDS, type MapNodeDef, type HerbDef, type PillDef, type EquipItem } from "./game/data";
 import {
   type GameState,
   type LogEntry,
@@ -42,6 +42,11 @@ import {
   startBrew,
   tick,
   useItem,
+  equipPower,
+  forgeEquip,
+  wearEquip,
+  unwearEquip,
+  sellEquip,
 } from "./game/state";
 
 const s = ref<GameState>(load());
@@ -89,10 +94,11 @@ const journalList = computed(() => s.value.logs.slice().reverse());
 
 // ===== 主界面 Tab（一念逍遥式底部栏）=====
 // 修炼(主面板+丹炉) / 灵兽(灵兽栏) / 秘境(地图+秘境塔) / 储物(商行) / 宗门(任务+境界之路)
-const mainTab = ref<"xiu" | "shou" | "mi" | "cu" | "zong">("xiu");
+const mainTab = ref<"xiu" | "shou" | "qi" | "mi" | "cu" | "zong">("xiu");
 const TABS = [
   { id: "xiu", name: "修炼", ico: "🧘" },
   { id: "shou", name: "灵兽", ico: "🐾" },
+  { id: "qi", name: "法器", ico: "⚒️" },
   { id: "mi", name: "秘境", ico: "🗺️" },
   { id: "cu", name: "储物", ico: "👝" },
   { id: "zong", name: "宗门", ico: "🏯" },
@@ -117,9 +123,38 @@ function signRewardText(r: { stones: number; spirit: number; pill: number }): st
   if (r.pill) parts.push(`🌟 破境丹×${r.pill}`);
   return parts.join(" · ");
 }
-// 战力（左上玩家卡显示，一念逍遥式）
+// 战力（左上玩家卡显示，一念逍遥式；含装备）
 function combatPower() {
-  return maxHpOf(s.value) + atkOf(s.value) * 5 + Math.floor(s.value.spirit / 100);
+  return maxHpOf(s.value) + atkOf(s.value) * 5 + Math.floor(s.value.spirit / 100) + equipPower(s.value);
+}
+// ===== M6.1：挂机猎妖 + 装备 =====
+function toggleAuto() {
+  s.value.auto = !s.value.auto;
+  save(s.value);
+  flushToasts();
+}
+function affixFmt(a: { id: string; val: number }): string {
+  const def = AFFIXES.find((x) => x.id === a.id);
+  return def ? def.fmt(a.val) : a.id;
+}
+function doForge(slotId: string, q: number) {
+  forgeEquip(s.value, slotId, q);
+  flushToasts();
+}
+function doWear(uid: number) {
+  wearEquip(s.value, uid);
+  flushToasts();
+}
+function doUnwear(slotId: string) {
+  unwearEquip(s.value, slotId);
+  flushToasts();
+}
+function doSell(uid: number) {
+  sellEquip(s.value, uid);
+  flushToasts();
+}
+function matN(id: string): number {
+  return s.value.mats[id] ?? 0;
 }
 function fmtTime(t: number) {
   const d = new Date(t);
@@ -560,6 +595,21 @@ onBeforeUnmount(() => {
     </div>
 
     <section class="card hero-card" v-show="mainTab === 'xiu' && !inBattle">
+      <!-- M6.1：挂机猎妖（一念逍遥式自动打怪循环开关 + 每日斩妖赏进度） -->
+      <div class="auto-panel">
+        <button class="auto-switch" :class="{ on: s.auto }" @click="toggleAuto">
+          <span class="auto-knob"></span>
+          <span class="auto-txt">{{ s.auto ? "🗡️ 挂机猎妖 · 自动寻敌出手" : "🛑 挂机已停 · 静候机缘" }}</span>
+        </button>
+        <div class="auto-kill">
+          <span class="ak-label">今日斩妖 <b>{{ s.killToday }}</b> 头 · 累计 {{ s.kills.toLocaleString() }}</span>
+          <span class="ak-tiers">
+            <em v-for="k in KILL_REWARDS" :key="k.n" :class="{ got: s.killTier > KILL_REWARDS.indexOf(k) }">
+              {{ k.n }}赏✓
+            </em>
+          </span>
+        </div>
+      </div>
       <!-- M6：横版行走场景（人在山水里走：视差远山 + 可点地点 + 行走人物） -->
       <div class="scene-shell" ref="sceneShellEl">
         <svg class="scene-sky sky-far" viewBox="0 0 1440 300" preserveAspectRatio="none" aria-hidden="true">
@@ -817,6 +867,56 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <p v-else class="dim">尚无灵兽。商行有售灵兽蛋（灵狐/青鳞蛇/麒麟/真龙），购得后点「用」孵化认主。</p>
+    </section>
+
+    <!-- M6.1：法器（六部位穿戴 + 词条 + 锻造 + 行囊）（Tab：法器） -->
+    <section class="card qi-panel" v-show="mainTab === 'qi' && !inBattle">
+      <h2>⚒️ 法器 <em class="qi-mats">⛏️ 灵矿石 {{ matN("ore") }} · 🔮 妖核 {{ matN("essence") }}</em></h2>
+      <p class="dim qi-intro">斩妖得矿石与妖核，锻炉炼器。词条随机：攻击 / 气血 / 御风（速）/ 破妄（会心）/ 噬血（吸血）/ 闪身。</p>
+      <!-- 六部位穿戴 -->
+      <div class="equip-grid">
+        <div v-for="sl in EQUIP_SLOTS" :key="sl.id" class="equip-slot" :class="s.equip[sl.id] ? QUALITIES[s.equip[sl.id]!.quality].cls : 'empty'">
+          <b class="es-name">{{ s.equip[sl.id] ? QUALITIES[s.equip[sl.id]!.quality].name + "·" + s.equip[sl.id]!.name : sl.icon + " " + sl.name + "（空）" }}</b>
+          <span class="es-base" v-if="s.equip[sl.id]">{{ sl.icon }} {{ sl.name }}</span>
+          <ul class="es-affix" v-if="s.equip[sl.id] && s.equip[sl.id]!.affixes.length">
+            <li v-for="a in s.equip[sl.id]!.affixes" :key="a.id">{{ affixFmt(a) }}</li>
+          </ul>
+          <button class="mini" v-if="s.equip[sl.id]" @click="doUnwear(sl.id)">卸下</button>
+        </div>
+      </div>
+      <!-- 锻造炉 -->
+      <div class="forge-panel">
+        <p class="sp-title">🔥 锻炉（材料越厚，品阶越高；妖核为硬门槛）</p>
+        <div class="forge-row" v-for="sl in EQUIP_SLOTS" :key="sl.id">
+          <span class="fg-slot">{{ sl.icon }} {{ sl.name }}</span>
+          <button
+            v-for="(rc, q) in FORGE_RECIPES"
+            :key="q"
+            class="mini fg-btn"
+            :class="QUALITIES[q].cls"
+            :disabled="matN('ore') < rc.ore || matN('essence') < rc.essence"
+            :title="`需灵矿石 ${rc.ore}${rc.essence ? '、妖核 ' + rc.essence : ''}`"
+            @click="doForge(sl.id, q)"
+          >
+            {{ QUALITIES[q].name }}<small>矿{{ rc.ore }}{{ rc.essence ? " 核" + rc.essence : "" }}</small>
+          </button>
+        </div>
+      </div>
+      <!-- 行囊 -->
+      <div class="bag-panel">
+        <p class="sp-title">🎒 行囊（{{ s.equipBag.length }} 件）</p>
+        <div class="bag-list" v-if="s.equipBag.length">
+          <div v-for="e in s.equipBag" :key="e.uid" class="bag-item" :class="QUALITIES[e.quality].cls">
+            <b>{{ EQUIP_SLOTS.find((x) => x.id === e.slot)?.icon }} {{ QUALITIES[e.quality].name }}·{{ e.name }}</b>
+            <span class="bi-affix" v-if="e.affixes.length">{{ e.affixes.map(affixFmt).join(" · ") }}</span>
+            <span>
+              <button class="mini" @click="doWear(e.uid)">穿上</button>
+              <button class="mini" @click="doSell(e.uid)">售</button>
+            </span>
+          </div>
+        </div>
+        <p v-else class="dim">行囊空空——去野外斩妖攒矿石，再回锻炉炼器。</p>
+      </div>
     </section>
 
     <!-- 秘境大厅（Tab：秘境）· 探秘 / 行脚山水 -->
