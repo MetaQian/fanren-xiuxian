@@ -104,6 +104,23 @@ const btnText = () => {
   return isTopStage() ? `冲击${REALMS[s.value.realm + 1].name}` : "修 炼";
 };
 const canAct = () => !s.value.enemy && !isFinal() && s.value.spirit >= cost();
+// 按钮为何置灰：给玩家一个明确的原因，而不是干等
+const actHint = () => {
+  if (s.value.enemy) return "战斗中不可修炼，先了结眼前之战。";
+  if (isFinal()) return "";
+  const c = cost();
+  if (!c) return "";
+  if (s.value.spirit < c) {
+    const lack = c - s.value.spirit;
+    const sp = speedOf(s); // 每秒（每息）积累量，重伤/入定已计入
+    const secs = sp > 0 ? Math.ceil(lack / sp) : Infinity;
+    const need = Number.isFinite(secs)
+      ? `，按当前增速约需 ${secs.toLocaleString()} 息`
+      : "";
+    return `灵力尚缺 ${Math.ceil(lack).toLocaleString()}${need}${injured() ? "（重伤未愈，增速减半）" : ""}。`;
+  }
+  return "";
+};
 const breakChance = () =>
   Math.min(0.95, REALMS[s.value.realm].breakChance + methodOf(s.value).breakBonus);
 
@@ -185,6 +202,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="bar"><div class="fill" :style="{ width: pct + '%' }"></div></div>
       <button class="act" :disabled="!canAct()" @click="doAct">{{ btnText() }}</button>
+      <p v-if="actHint()" class="act-hint">{{ actHint() }}</p>
       <div class="sub-actions">
         <button class="mini" :disabled="meditating() || !!s.enemy" @click="meditate(s); flushToasts()">
           入定（×2.5 / 10息）
