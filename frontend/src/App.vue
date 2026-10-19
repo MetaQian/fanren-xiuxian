@@ -59,10 +59,11 @@ function flushToasts() {
 function dismissToast(id: number) {
   toasts.value = toasts.value.filter((t) => t.id !== id);
 }
-for (const l of s.value.logs.slice(-1)) {
-  // 开场白（离线结算等）首屏即弹一条，之后静默
+// 首屏只弹"刚产生的"日志（如离线结算，t≈now）；陈旧的（刷新前的入定等）不弹
+const lastLog = s.value.logs[s.value.logs.length - 1];
+if (lastLog && Date.now() - lastLog.t < 10000) {
   const id = ++toastId;
-  toasts.value.push({ id, text: l.text, kind: l.kind });
+  toasts.value.push({ id, text: lastLog.text, kind: lastLog.kind });
   window.setTimeout(() => dismissToast(id), 5000);
 }
 
