@@ -1,0 +1,234 @@
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(1100px 700px at 75% -10%, #1c2438 0%, rgba(28, 36, 56, 0) 60%),
+    #0b0f16;
+  color: #d8d3c8;
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", serif;
+}
+
+.wrap {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 28px 16px 48px;
+}
+
+header h1 {
+  font-size: 34px;
+  letter-spacing: 10px;
+  margin: 6px 0 2px;
+  color: #ece3c9;
+  text-shadow: 0 0 20px rgba(212, 175, 55, 0.35);
+}
+
+header .sub {
+  font-size: 17px;
+  letter-spacing: 4px;
+  color: #8f8875;
+  font-weight: normal;
+}
+
+header .tag {
+  color: #7d776a;
+  margin: 8px 0 20px;
+  font-size: 13px;
+  letter-spacing: 2px;
+}
+
+.card {
+  background: rgba(20, 26, 38, 0.82);
+  border: 1px solid #2a3348;
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+
+.card h2 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  letter-spacing: 4px;
+  color: #b8a97e;
+  font-weight: normal;
+}
+
+.who {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px dashed #2a3348;
+}
+
+.who label {
+  display: block;
+  font-size: 11px;
+  color: #6f6a5e;
+  letter-spacing: 2px;
+}
+
+.who b {
+  font-size: 14px;
+  color: #e0d8c2;
+  font-weight: 600;
+}
+
+.realm-name {
+  font-size: 24px;
+  letter-spacing: 3px;
+  color: #f0e6c8;
+}
+
+.realm-note {
+  margin: 4px 0 12px;
+  font-size: 12.5px;
+  color: #8a8474;
+}
+
+.bar {
+  height: 14px;
+  border-radius: 7px;
+  background: #141a26;
+  border: 1px solid #2a3348;
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8a6d1f, #d4af37 60%, #f3d97a);
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.5);
+  transition: width 0.4s ease;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 10px 0 14px;
+  font-size: 12.5px;
+  color: #9a9484;
+  font-variant-numeric: tabular-nums;
+}
+
+.act {
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  letter-spacing: 6px;
+  font-family: inherit;
+  color: #10141c;
+  background: linear-gradient(180deg, #e9cf7f, #c69a2e);
+  border: 1px solid #8a6d1f;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+.act:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.act:disabled {
+  filter: grayscale(0.7) brightness(0.7);
+  cursor: not-allowed;
+}
+
+.warn {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #b96a5a;
+  text-align: center;
+  letter-spacing: 1px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  padding: 4px 14px;
+  border-radius: 999px;
+  border: 1px solid #2a3348;
+  color: #5c584c;
+  font-size: 13px;
+  letter-spacing: 2px;
+}
+
+.chip.past {
+  color: #8a8474;
+  border-color: #3a4560;
+}
+
+.chip.now {
+  color: #f0e6c8;
+  border-color: #d4af37;
+  background: rgba(212, 175, 55, 0.12);
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.25);
+}
+
+.log ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.9;
+}
+
+.log li {
+  border-bottom: 1px solid #1b2232;
+  padding: 2px 0;
+  color: #9a9484;
+}
+
+.log li.good {
+  color: #9fc98a;
+}
+
+.log li.bad {
+  color: #cf8074;
+}
+
+.log li.break {
+  color: #e9cf7f;
+  text-shadow: 0 0 8px rgba(212, 175, 55, 0.3);
+}
+
+footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: #55503f;
+  letter-spacing: 1px;
+}
+
+footer .reset {
+  background: none;
+  border: none;
+  color: #55503f;
+  font-size: 11.5px;
+  font-family: inherit;
+  cursor: pointer;
+  letter-spacing: 1px;
+  padding: 0;
+}
+
+footer .reset:hover {
+  color: #b96a5a;
+}
