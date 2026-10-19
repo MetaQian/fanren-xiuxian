@@ -70,6 +70,7 @@ const missionDone = (m: (typeof MISSIONS)[number]) =>
 
 // 战斗视图
 const enemy = () => s.value.enemy;
+const canDungeon = () => !s.value.enemy && dungeonOpen(s.value);
 const enemyDef = () => enemyOf(s.value);
 const hpPct = () => Math.max(0, (s.value.hp / maxHpOf(s.value)) * 100);
 const canCast = (id: string) => {
@@ -149,7 +150,7 @@ onBeforeUnmount(() => {
       <p v-if="!isFinal() && isTopStage() && !s.enemy" class="warn">
         突破成功率 {{ Math.round(breakChance() * 100) }}%（功法加成已计入）—— 失败恐遭天劫反噬
       </p>
-      <p v-if="!dungeonOpen() && !s.enemy" class="dim">
+      <p v-if="!canDungeon() && !s.enemy" class="dim">
         秘境之门紧闭：需修至{{ stageLabel(s.realm, 3) }}方可踏入{{ DUNGEON.name }}。
       </p>
     </section>
