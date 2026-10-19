@@ -9,6 +9,9 @@ import {
   MISSIONS,
   PILLS,
   SPELLS,
+  TOWER,
+  TOWER_ELITES,
+  TOWER_MOBS,
   type EnemyDef,
   type HerbDef,
   type ItemDef,
@@ -61,6 +64,8 @@ export interface GameState {
   gatherUntil: number; // 凝气丹修炼加速截止（ms）
   gatherMul: number; // 凝气丹加速倍率（0=无）
   breakPillStacks: number; // 破境丹层数（0-3，大突破时消耗）
+  tower: { floor: number } | null; // 镇岳塔本次登塔进度（null=不在塔内）
+  towerBest: number; // 镇岳塔历史最高层
   logs: LogEntry[];
   lastSave: number;
   created: number;
@@ -158,7 +163,7 @@ export function moveTo(s: GameState, id: string): void {
 
 // 野外遭遇：按概率结算（moveTo 踏入时 dtSec=1；tick 每秒传实际秒数）
 export function tryWildEncounter(s: GameState, node?: MapNodeDef, dtSec = 1): void {
-  if (s.enemy || s.dungeon) return;
+  if (s.enemy || s.dungeon || s.tower) return;
   const nd = node ?? currentNode(s);
   if (nd.kind !== "wild" || !nd.encounter) return;
   if (Math.random() >= nd.encounter * dtSec) return;
@@ -176,7 +181,10 @@ export function atkOf(s: GameState): number {
 }
 
 export function enemyOf(s: GameState): EnemyDef | null {
-  return s.enemy ? ENEMIES.find((e) => e.id === s.enemy!.defId) ?? null : null;
+  if (!s.enemy) return null;
+  // 镇岳塔：动态按层合成的凶物
+  if (s.enemy.defId.startsWith("tower:")) return towerEnemyAt(parseInt(s.enemy.defId.slice(6), 10));
+  return ENEMIES.find((e) => e.id === s.enemy!.defId) ?? null;
 }
 
 // 下一级所需灵力：境内存级差 1.6 倍；冲入下一大境界 = 下一境界 baseCost × 4
@@ -254,6 +262,8 @@ export function newGame(): GameState {
     gatherUntil: 0,
     gatherMul: 0,
     breakPillStacks: 0,
+    tower: null,
+    towerBest: 0,
     logs: [],
     lastSave: Date.now(),
     created: Date.now(),
@@ -553,9 +563,9 @@ export function useItem(s: GameState, id: string): void {
 
 // ===== M2：战斗 =====
 
-export function spawnEnemy(s: GameState, def: EnemyDef): void {
+export function spawnEnemy(s: GameState, def: EnemyDef, bossOverride?: boolean): void {
   const hp = Math.round(maxHpOf(s) * def.hpMul);
-  s.enemy = { defId: def.id, hp, maxHp: hp, atk: Math.round(maxHpOf(s) * def.atkMul), boss: def.boss };
+  s.enemy = { defId: def.id, hp, maxHp: hp, atk: Math.round(maxHpOf(s) * def.atkMul), boss: bossOverride ?? def.boss };
 }
 
 function rnd(min: number, max: number): number {
@@ -661,6 +671,8 @@ function winFight(s: GameState, edef: EnemyDef): void {
     } else {
       enterRoom(s, s.dungeon.room);
     }
+  } else if (s.tower) {
+    towerAdvance(s);
   } else {
     s.armorTurns = 0;
     s.bellActive = false;
@@ -688,6 +700,69 @@ function loseFight(s: GameState, edef: EnemyDef): void {
     pushLog(s, "仓皇退出" + DUNGEON.name + "，洞府之门在身后闭合……", "bad");
     s.dungeon = null;
   }
+  // 镇岳塔：被击落出塔，保留最高层
+  if (s.tower) {
+    pushLog(s, `煞气将你震出【${TOWER.name}】，只攀至第 ${s.tower.floor} 层，最高层记录 ${s.towerBest}。`, "bad");
+    s.tower = null;
+  }
+  save(s);
+}
+
+// ===== M3：镇岳塔（七玄门后山老塔，无限层）=====
+
+// 按层合成凶物：普通层 / 镇守（精英）。基准仍是玩家气血，故境界上去了才攻得动高层
+export function towerEnemyAt(floor: number): EnemyDef {
+  const elite = floor % TOWER.eliteEvery === 0;
+  const hpMul =
+    (TOWER.hpBase + TOWER.hpPerFloor * (floor - 1)) * (elite ? TOWER.eliteHpMul : 1);
+  const atkMul =
+    (TOWER.atkBase + TOWER.atkPerFloor * (floor - 1)) * (elite ? TOWER.eliteAtkMul : 1);
+  const lo = TOWER.stoneBase + TOWER.stonePerFloor * (floor - 1);
+  const hi = Math.round(lo * 1.5) + (elite ? lo : 0);
+  const name = elite ? TOWER_ELITES[(floor / TOWER.eliteEvery - 1) % TOWER_ELITES.length] : TOWER_MOBS[(floor - 1) % TOWER_MOBS.length];
+  const flavor = elite
+    ? `第 ${floor} 层【镇守】现世：${name}盘踞层关，煞气冲霄！`
+    : `第 ${floor} 层：${name}自墙缝中渗出，煞意森森。`;
+  return {
+    id: `tower:${floor}`,
+    name: elite ? `镇守·${name}` : name,
+    hpMul,
+    atkMul,
+    stones: [Math.round(lo), Math.round(hi)],
+    itemChance: 0.15 + (floor % 5) * 0.03,
+    realms: [],
+    boss: elite,
+    flavor,
+  };
+}
+
+export function enterTower(s: GameState): void {
+  if (s.enemy || s.tower || s.dungeon) return;
+  if (s.stones < TOWER.fee) {
+    pushLog(s, `灵石不足（需 ${TOWER.fee} 作登塔香钱）。`, "info");
+    return;
+  }
+  s.stones -= TOWER.fee;
+  s.tower = { floor: 1 };
+  pushLog(s, `踏入门内铜阶，【${TOWER.name}】层层煞气自下而上涌来。第 1 层，凶物现身。`, "break");
+  spawnEnemy(s, towerEnemyAt(1));
+  save(s);
+}
+
+// 胜一层：记录最高层；里程碑层（每 10 层）给大赏并给下一层入口
+function towerAdvance(s: GameState): void {
+  if (!s.tower) return;
+  const floor = s.tower.floor;
+  if (floor > s.towerBest) s.towerBest = floor;
+  // 里程碑层关：额外灵石 + 回气
+  if (floor % TOWER.milestoneEvery === 0) {
+    const bonus = (TOWER.stoneBase + TOWER.stonePerFloor * floor) * 4;
+    s.stones += bonus;
+    s.hp = Math.min(maxHpOf(s), s.hp + Math.round(maxHpOf(s) * 0.4));
+    pushLog(s, `第 ${floor} 层【层关】破！得赏灵石 ${bonus}，吐纳回气，可继续登塔。`, "break");
+  }
+  s.tower.floor += 1;
+  spawnEnemy(s, towerEnemyAt(s.tower.floor));
   save(s);
 }
 
@@ -783,6 +858,11 @@ export function retreat(s: GameState): void {
   if (s.dungeon) {
     pushLog(s, "你遁出" + DUNGEON.name + "，石门在身后无声闭合。", "info");
     s.dungeon = null;
+  }
+  if (s.tower) {
+    if (s.tower.floor > s.towerBest) s.towerBest = s.tower.floor;
+    pushLog(s, `你扶着铜阶退回【${TOWER.name}】塔底，本次攀至第 ${s.tower.floor} 层，最高层 ${s.towerBest}。`, "info");
+    s.tower = null;
   }
   save(s);
 }

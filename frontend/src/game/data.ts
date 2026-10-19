@@ -247,6 +247,38 @@ export const DUNGEON = {
   fee: 20, // 进入费用（灵石）
 };
 
+// ===== M3：镇岳塔（七玄门后山老塔，无限层爬塔，对标一念逍遥 tower 表）=====
+// 世界观：前代掌门镇煞所建，煞气日夜自塔底渗上，越往上凶物越烈。
+export const TOWER = {
+  name: "镇岳塔",
+  fee: 10, // 登塔香钱（灵石）
+  eliteEvery: 5, // 每 5 层一只「镇守」（精英/领主）
+  milestoneEvery: 10, // 每 10 层一座「层关」，给里程碑大赏
+  // 怪物强度按层缩放（基准仍是玩家当前气血 maxHpOf，故境界上去了才攻得动高层）
+  hpBase: 0.55, // 1 层基础 hpMul
+  hpPerFloor: 0.055, // 每层 hpMul 增量
+  atkBase: 0.045, // 1 层基础 atkMul（占玩家气血）
+  atkPerFloor: 0.0038, // 每层 atkMul 增量
+  eliteHpMul: 1.7, // 镇守气血倍率
+  eliteAtkMul: 1.35, // 镇守攻击倍率
+  stoneBase: 8, // 1 层灵石下限
+  stonePerFloor: 6, // 每层灵石增长
+  spiritBase: 12, // 单层灵力基础（再叠层数）
+};
+
+// 塔里各层凶物的「名号」——按层轮回，精英层用镇守名
+export const TOWER_MOBS = ["游丝煞", "缠足鬼", "噬碑蛛", "泣血灵", "裂甲魔", "断肠傀", "蚀骨风", "焚心蝶"];
+export const TOWER_ELITES = [
+  "守阙煞将",
+  "镇渊鬼母",
+  "裂岳蛛王",
+  "噬魂灯主",
+  "锁天魔君",
+  "焚塔血翁",
+  "吞碑古修",
+  "镇岳守煞",
+];
+
 // ===== M2.5：场景地图（开放世界基础：节点 + 邻接 + 境界解锁 + 地点效果） =====
 
 export interface MapNodeDef {

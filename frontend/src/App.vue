@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { DUNGEON, ITEMS, HERBS, PILLS, METHODS, MISSIONS, REALMS, SPELLS, MAP_NODES, type MapNodeDef, type HerbDef, type PillDef } from "./game/data";
+import { DUNGEON, ITEMS, HERBS, PILLS, TOWER, METHODS, MISSIONS, REALMS, SPELLS, MAP_NODES, type MapNodeDef, type HerbDef, type PillDef } from "./game/data";
 import {
   type GameState,
   type LogEntry,
@@ -15,6 +15,7 @@ import {
   dungeonOpen,
   enemyOf,
   enterDungeon,
+  enterTower,
   itemDef,
   load,
   maxHpOf,
@@ -202,7 +203,11 @@ const ICONS: Record<string, string> = {
   herb_riyan: "🌺",
   herb_leisui: "⚡",
 };
-const ico = (id?: string) => (id ? ICONS[id] ?? "✦" : "✦");
+const ico = (id?: string) => {
+  if (!id) return "✦";
+  if (id.startsWith("tower:")) return "👹";
+  return ICONS[id] ?? "✦";
+};
 const toastIco = (k: string) => (k === "break" ? "⚡" : k === "good" ? "🌿" : k === "bad" ? "🗡️" : "📜");
 const btnText = () => {
   if (s.value.enemy) return "战斗中 · 不可修炼";
@@ -401,8 +406,11 @@ onBeforeUnmount(() => {
       <button class="act" :disabled="!canAct()" @click="doAct">{{ btnText() }}</button>
       <p v-if="actHint()" class="act-hint">{{ actHint() }}</p>
       <div class="sub-actions">
-        <button class="mini" :disabled="!!s.enemy" @click="enterDungeon(s); flushToasts()">
+        <button class="mini" :disabled="!!s.enemy || !!s.dungeon" @click="enterDungeon(s); flushToasts()">
           🕳️ 探秘{{ DUNGEON.name }}（{{ DUNGEON.fee }}石）
+        </button>
+        <button class="mini" :disabled="!!s.enemy || !!s.tower || !!s.dungeon" @click="enterTower(s); flushToasts()">
+          🗼 登{{ TOWER.name }}（{{ TOWER.fee }}石）<small v-if="s.towerBest"> · 最高 {{ s.towerBest }} 层</small>
         </button>
         <button class="mini" @click="mapOpen = true">
           🗺️ 场景地图 · 现居【{{ curNode().name }}】
@@ -521,10 +529,10 @@ onBeforeUnmount(() => {
     </section>
 
     <!-- 战斗 / 秘境 -->
-    <section class="card" v-if="s.enemy || s.dungeon">
+    <section class="card" v-if="s.enemy || s.dungeon || s.tower">
       <h2>
-        {{ s.dungeon ? `🕳️ 秘境·${DUNGEON.name} 第 ${s.dungeon.room + 1}/${s.dungeon.total} 重` : "⚔️ 遭遇战" }}
-        <em v-if="enemy() && enemyDef()?.boss" class="boss-tag">领主</em>
+        {{ s.dungeon ? `🕳️ 秘境·${DUNGEON.name} 第 ${s.dungeon.room + 1}/${s.dungeon.total} 重` : s.tower ? `🗼 镇岳塔 第 ${s.tower.floor} 层` : "⚔️ 遭遇战" }}
+        <em v-if="enemy() && enemyDef()?.boss" class="boss-tag">{{ s.tower ? "镇守" : "领主" }}</em>
       </h2>
       <div v-if="s.enemy" class="battle">
         <div class="foe">
