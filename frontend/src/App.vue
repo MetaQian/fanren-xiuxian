@@ -132,6 +132,29 @@ function doMeditate() {
 }
 // 入定剩余秒数（模板里取不到 Date，用函数算）
 const medLeft = () => Math.max(0, Math.ceil((s.value.meditateUntil - Date.now()) / 1000));
+// ===== 图标点缀 =====
+const REALM_ICONS = ["🌫️", "🏔️", "⚛️", "🐲", "🌟"]; // 按大境界序号
+const realmIco = () => REALM_ICONS[s.value.realm] ?? "🌫️";
+const ICONS: Record<string, string> = {
+  sword: "⚔️",
+  flash: "⚡",
+  recover: "💚",
+  shield: "🔔",
+  thunder: "🌩️",
+  heal: "🌿",
+  gather: "💊",
+  armor: "🪬",
+  wolf: "🐺",
+  beast: "🦊",
+  raider: "🏹",
+  mobei: "😈",
+  ghost: "👻",
+  beastking: "🐯",
+  demonlord: "💀",
+  yuanshui: "☠️",
+};
+const ico = (id?: string) => (id ? ICONS[id] ?? "✦" : "✦");
+const toastIco = (k: string) => (k === "break" ? "⚡" : k === "good" ? "🌿" : k === "bad" ? "🗡️" : "📜");
 const btnText = () => {
   if (s.value.enemy) return "战斗中 · 不可修炼";
   if (isFinal()) return "已臻化神 · 静待飞升";
@@ -242,7 +265,7 @@ onBeforeUnmount(() => {
       <div class="head-row">
         <h1>凡人修仙 <span class="sub">· 七玄外传</span></h1>
         <button class="mini journal-btn" @click="journalOpen = true">
-          史册（{{ s.logs.length }}）
+          📜 史册（{{ s.logs.length }}）
         </button>
       </div>
       <p class="tag">凡人流 · 放置修炼 · 每一次突破，皆是生死一线</p>
@@ -257,9 +280,9 @@ onBeforeUnmount(() => {
         <div><label>因果</label><b>{{ s.karma }}</b></div>
         <div><label>低调</label><b>{{ s.lowKey }} / 100</b></div>
       </div>
-      <div class="realm-name">{{ stageLabel(s.realm, s.stage) }}</div>
+      <div class="realm-name"><span class="realm-ico">{{ realmIco() }}</span>{{ stageLabel(s.realm, s.stage) }}</div>
       <p class="realm-note">{{ REALMS[s.realm].note }}（功法：{{ methodOf(s).name }}）</p>
-      <p class="bar-label">气血 · 生死之基</p>
+      <p class="bar-label">💗 气血 · 生死之基</p>
       <div class="bar hp-bar"><div class="fill hp-fill" :style="{ width: hpPct() + '%' }"></div></div>
       <div class="meta">
         <span>气血 {{ Math.floor(s.hp).toLocaleString() }} / {{ maxHpOf(s).toLocaleString() }}</span>
@@ -271,7 +294,7 @@ onBeforeUnmount(() => {
         </span>
         <span>历时 {{ Math.floor(s.days).toLocaleString() }} 日</span>
       </div>
-      <p class="bar-label">灵力 · 攒满即可{{ costTarget() }}</p>
+      <p class="bar-label">💠 灵力 · 攒满即可{{ costTarget() }}</p>
       <div class="bar">
         <div class="fill med-preview" :style="{ left: pct() + '%', width: Math.max(0, medPct() - pct()) + '%' }"></div>
         <div class="fill spirit-fill" :style="{ width: pct() + '%' }"></div>
@@ -280,12 +303,12 @@ onBeforeUnmount(() => {
       <p v-if="actHint()" class="act-hint">{{ actHint() }}</p>
       <div class="sub-actions">
         <button class="mini" :disabled="!!s.enemy" @click="enterDungeon(s); flushToasts()">
-          探秘{{ DUNGEON.name }}（{{ DUNGEON.fee }}石）
+          🕳️ 探秘{{ DUNGEON.name }}（{{ DUNGEON.fee }}石）
         </button>
       </div>
       <!-- 入定：时长可调 + 条上预览（浅蓝段） -->
       <div class="stone-panel">
-        <p class="sp-title">入定（速度 ×2.5）· 灵力条浅蓝段 = 入定后预计灵力</p>
+        <p class="sp-title">🧘 入定（速度 ×2.5）· 灵力条浅蓝段 = 入定后预计灵力</p>
         <div class="sp-row">
           <input
             class="sp-input"
@@ -312,7 +335,7 @@ onBeforeUnmount(() => {
       </div>
       <!-- 灵石化灵：设数量 → 预览 → 确认 -->
       <div class="stone-panel">
-        <p class="sp-title">灵石化灵（1 石 = 10 灵力，持有 {{ s.stones.toLocaleString() }} 石）</p>
+        <p class="sp-title">💎 灵石化灵（1 石 = 10 灵力，持有 {{ s.stones.toLocaleString() }} 石）</p>
         <div class="sp-row">
           <input
             class="sp-input"
@@ -347,12 +370,12 @@ onBeforeUnmount(() => {
     <!-- 战斗 / 秘境 -->
     <section class="card" v-if="s.enemy || s.dungeon">
       <h2>
-        {{ s.dungeon ? `秘境·${DUNGEON.name} 第 ${s.dungeon.room + 1}/${s.dungeon.total} 重` : "遭遇战" }}
+        {{ s.dungeon ? `🕳️ 秘境·${DUNGEON.name} 第 ${s.dungeon.room + 1}/${s.dungeon.total} 重` : "⚔️ 遭遇战" }}
         <em v-if="enemy() && enemyDef()?.boss" class="boss-tag">领主</em>
       </h2>
       <div v-if="s.enemy" class="battle">
         <div class="foe">
-          <b>{{ enemyDef()?.name }}</b>
+          <b>{{ ico(enemyDef()?.id) }} {{ enemyDef()?.name }}</b>
           <div class="bar foe-bar"><div class="fill foe-fill" :style="{ width: (s.enemy.hp / s.enemy.maxHp) * 100 + '%' }"></div></div>
           <span class="dim">{{ Math.max(0, Math.floor(s.enemy.hp)) }} / {{ s.enemy.maxHp }} 气血</span>
         </div>
@@ -365,7 +388,7 @@ onBeforeUnmount(() => {
             :title="sp.desc"
             @click="castSpell(s, sp.id); flushToasts()"
           >
-            {{ sp.name }}<small>（{{ sp.cost }}灵）</small>
+            {{ ico(sp.id) }} {{ sp.name }}<small>（{{ sp.cost }}灵）</small>
           </button>
         </div>
         <div class="inv-row">
@@ -375,13 +398,13 @@ onBeforeUnmount(() => {
             class="mini"
             @click="useItem(s, it.def.id); flushToasts()"
           >
-            用·{{ it.def.name }}×{{ it.n }}
+            用·{{ ico(it.def.id) }}{{ it.def.name }}×{{ it.n }}
           </button>
           <button
             class="mini retreat-btn"
             @click="retreat(s); flushToasts()"
           >
-            撤退（弃战保命）
+            🏃 撤退（弃战保命）
           </button>
           <span v-if="!invEntries().length" class="dim">（无可用之物）</span>
         </div>
@@ -394,7 +417,7 @@ onBeforeUnmount(() => {
       <h2>储物袋 / 商行</h2>
       <div class="shop">
         <div v-for="it in ITEMS" :key="it.id" class="shop-item">
-          <b>{{ it.name }}</b><small>{{ it.desc }}</small>
+          <b>{{ ico(it.id) }} {{ it.name }}</b><small>{{ it.desc }}</small>
           <button class="mini" :disabled="!!s.enemy || s.stones < it.price" @click="buyItem(s, it.id); flushToasts()">
             购（{{ it.price }}石）
           </button>
@@ -451,7 +474,7 @@ onBeforeUnmount(() => {
     <div class="journal-mask" v-if="journalOpen" @click.self="journalOpen = false">
       <div class="journal">
         <div class="j-head">
-          <h2>修仙史册</h2>
+          <h2>📜 修仙史册</h2>
           <span class="dim">{{ s.logs.length }} 则</span>
           <button class="mini" @click="journalOpen = false">返回</button>
         </div>
@@ -474,7 +497,7 @@ onBeforeUnmount(() => {
         :class="t.kind"
         @click="dismissToast(t.id)"
       >
-        {{ t.text }}
+        <span class="t-ico">{{ toastIco(t.kind) }}</span>{{ t.text }}
       </div>
     </div>
 
