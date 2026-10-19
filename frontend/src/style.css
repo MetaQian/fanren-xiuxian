@@ -110,6 +110,98 @@ header .tag {
   transition: width 0.4s ease;
 }
 
+.hp-bar {
+  margin-bottom: 4px;
+}
+
+.hp-fill {
+  background: linear-gradient(90deg, #7a2e22, #cf5a48 60%, #e98a70);
+  box-shadow: 0 0 12px rgba(207, 90, 72, 0.4);
+}
+
+.dim {
+  color: #6f6a5e;
+  font-size: 12px;
+  margin: 6px 0 0;
+  letter-spacing: 1px;
+}
+
+.battle {
+  margin-top: 4px;
+}
+
+.foe b {
+  font-size: 16px;
+  color: #e0d8c2;
+  letter-spacing: 2px;
+}
+
+.boss-tag {
+  margin-left: 8px;
+  padding: 1px 10px;
+  font-size: 12px;
+  color: #10141c;
+  background: linear-gradient(180deg, #e9cf7f, #c69a2e);
+  border-radius: 999px;
+  font-style: normal;
+}
+
+.foe-bar {
+  margin: 6px 0 4px;
+}
+
+.foe-fill {
+  background: linear-gradient(90deg, #5a1f18, #a03a2c);
+  box-shadow: none;
+}
+
+.spell-row,
+.inv-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.spell {
+  flex: 1 1 45%;
+}
+
+.spell small,
+.inv-row .dim {
+  color: #8a8474;
+  font-size: 11px;
+}
+
+.shop {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shop-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.shop-item b {
+  color: #e0d8c2;
+  min-width: 64px;
+}
+
+.shop-item small {
+  color: #8a8474;
+  flex: 1;
+}
+
+.shop-item .mini {
+  flex: none;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
 .meta {
   display: flex;
   flex-wrap: wrap;

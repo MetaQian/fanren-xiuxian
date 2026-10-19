@@ -129,3 +129,73 @@ export const MISSIONS: MissionDef[] = [
   { id: "m9", name: "元婴出窍", desc: "突破至元婴", realm: 3, stage: 1, stones: 12000, spirit: 400000 },
   { id: "m10", name: "化神", desc: "登临此界巅峰：化神", realm: 4, stage: 1, stones: 30000, spirit: 0 },
 ];
+
+// ===== M2：战斗 / 秘境数据表 =====
+
+export interface SpellDef {
+  id: string;
+  name: string;
+  cost: number; // 灵力消耗
+  mul: number; // 伤害倍率（0 = 非攻击法术）
+  crit?: number; // 会心概率
+  critMul?: number; // 会心倍率
+  healPct?: number; // 治疗自身比例
+  block?: number; // 本回合减伤比例
+  realm: number; // 所需境界（下标）
+  desc: string;
+}
+
+export const SPELLS: SpellDef[] = [
+  { id: "sword", name: "灵剑术", cost: 50, mul: 1, realm: 0, desc: "御灵剑斩敌，平实可靠。" },
+  { id: "flash", name: "雷闪诀", cost: 120, mul: 1.5, crit: 0.15, critMul: 2, realm: 0, desc: "雷光一闪，15% 会心（×2）。" },
+  { id: "recover", name: "续命诀", cost: 200, mul: 0, healPct: 0.4, realm: 1, desc: "灵力归元，回复 40% 气血（消耗一回合）。" },
+  { id: "shield", name: "金钟罩", cost: 100, mul: 0, block: 0.6, realm: 1, desc: "金钟护体，本回合所受伤害 -60%。" },
+  { id: "thunder", name: "九天雷法", cost: 400, mul: 2.4, crit: 0.1, critMul: 2.5, realm: 2, desc: "九天雷落，毁天灭地之威。" },
+];
+
+export interface ItemDef {
+  id: string;
+  name: string;
+  price: number; // 灵石售价
+  healPct?: number;
+  spirit?: number; // 灵力收益 = maxHp × 该值
+  blockPct?: number;
+  blockTurns?: number;
+  combatOnly?: boolean;
+  desc: string;
+}
+
+export const ITEMS: ItemDef[] = [
+  { id: "heal", name: "回灵丹", price: 60, healPct: 0.5, desc: "回复 50% 气血。" },
+  { id: "gather", name: "聚灵丹", price: 40, spirit: 1, desc: "炼化得灵力（随境界增长）。" },
+  { id: "armor", name: "灵甲符", price: 100, blockPct: 0.5, blockTurns: 3, combatOnly: true, desc: "接下来 3 次受击 -50%（仅战斗中）。" },
+];
+
+export interface EnemyDef {
+  id: string;
+  name: string;
+  hpMul: number; // 相对玩家最大气血
+  atkMul: number; // 相对玩家攻击
+  stones: [number, number]; // 灵石掉落区间（×(1+境界)）
+  itemChance: number; // 掉落物品概率
+  realms: number[]; // 可出现的境界
+  boss?: boolean;
+  flavor: string;
+}
+
+export const ENEMIES: EnemyDef[] = [
+  { id: "wolf", name: "凶狼", hpMul: 0.7, atkMul: 0.75, stones: [10, 20], itemChance: 0.25, realms: [0], flavor: "草丛中凶气骤起，一头凶狼扑出。" },
+  { id: "beast", name: "洞窟灵兽", hpMul: 1, atkMul: 0.8, stones: [15, 30], itemChance: 0.3, realms: [0, 1, 2], flavor: "石缝中滑出一头生有灵纹的灵兽。" },
+  { id: "raider", name: "采药散修", hpMul: 0.9, atkMul: 0.9, stones: [20, 40], itemChance: 0.4, realms: [0, 1], flavor: "对方冷笑：「留下财货，滚吧。」" },
+  { id: "mobei", name: "游荡魔修", hpMul: 1.1, atkMul: 1, stones: [30, 60], itemChance: 0.4, realms: [1, 2, 3], flavor: "黑气盘绕，一名魔修在荒界游荡至此。" },
+  { id: "ghost", name: "游荡鬼魂", hpMul: 0.8, atkMul: 1.1, stones: [25, 50], itemChance: 0.35, realms: [1, 2, 3], flavor: "寒气凝雾，鬼魂哀嚎着围拢过来。" },
+  { id: "beastking", name: "兽王", hpMul: 1.5, atkMul: 1.2, stones: [80, 150], itemChance: 0.6, realms: [0, 1], boss: true, flavor: "兽王仰天长啸，地面震颤。" },
+  { id: "demonlord", name: "天魔教徒", hpMul: 1.8, atkMul: 1.35, stones: [150, 300], itemChance: 0.8, realms: [1, 2], boss: true, flavor: "黑石座上端坐一道红袍，目光如刀。" },
+  { id: "yuanshui", name: "陨落元婴", hpMul: 2, atkMul: 1.4, stones: [300, 600], itemChance: 0.9, realms: [2, 3, 4], boss: true, flavor: "枯骨而立，眼中神光依旧森然。" },
+];
+
+export const DUNGEON = {
+  name: "启元洞府",
+  rooms: 6, // 共 6 房，末房必为领主
+  fee: 20, // 进入费用（灵石）
+};

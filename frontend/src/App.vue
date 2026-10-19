@@ -1,13 +1,20 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import { METHODS, MISSIONS, REALMS } from "./game/data";
+import { DUNGEON, ITEMS, METHODS, MISSIONS, REALMS, SPELLS } from "./game/data";
 import {
   type GameState,
   type LogEntry,
   act,
+  buyItem,
+  castSpell,
   checkMissions,
   currentMission,
+  dungeonOpen,
+  enemyOf,
+  enterDungeon,
+  itemDef,
   load,
+  maxHpOf,
   meditate,
   methodOf,
   nextCost,
@@ -17,6 +24,7 @@ import {
   stageLabel,
   stoneToSpirit,
   tick,
+  useItem,
 } from "./game/state";
 
 const s = ref<GameState>(load());
@@ -48,16 +56,30 @@ const pct = () => {
 const injured = () => Date.now() < s.value.injuredUntil;
 const meditating = () => Date.now() < s.value.meditateUntil;
 const btnText = () => {
+  if (s.value.enemy) return "战斗中 · 不可修炼";
   if (isFinal()) return "已臻化神 · 静待飞升";
   return isTopStage() ? `冲击${REALMS[s.value.realm + 1].name}` : "修 炼";
 };
-const canAct = () => !isFinal() && s.value.spirit >= cost();
+const canAct = () => !s.value.enemy && !isFinal() && s.value.spirit >= cost();
 const breakChance = () =>
   Math.min(0.95, REALMS[s.value.realm].breakChance + methodOf(s.value).breakBonus);
 
 const mission = () => currentMission(s.value);
 const missionDone = (m: (typeof MISSIONS)[number]) =>
   s.value.realm > m.realm || (s.value.realm === m.realm && s.value.stage >= m.stage);
+
+// 战斗视图
+const enemy = () => s.value.enemy;
+const enemyDef = () => enemyOf(s.value);
+const hpPct = () => Math.max(0, (s.value.hp / maxHpOf(s.value)) * 100);
+const canCast = (id: string) => {
+  const sp = SPELLS.find((x) => x.id === id)!;
+  return !!s.value.enemy && s.value.realm >= sp.realm && s.value.spirit >= sp.cost;
+};
+
+// 背包
+const invEntries = () =>
+  Object.entries(s.value.inv).filter(([, n]) => n > 0).map(([id, n]) => ({ def: itemDef(id)!, n }));
 
 let timer: number | undefined;
 const onHide = () => save(s.value);
@@ -100,8 +122,9 @@ onBeforeUnmount(() => {
       </div>
       <div class="realm-name">{{ stageLabel(s.realm, s.stage) }}</div>
       <p class="realm-note">{{ REALMS[s.realm].note }}（功法：{{ methodOf(s).name }}）</p>
-      <div class="bar"><div class="fill" :style="{ width: pct + '%' }"></div></div>
+      <div class="bar hp-bar"><div class="fill hp-fill" :style="{ width: hpPct + '%' }"></div></div>
       <div class="meta">
+        <span>气血 {{ Math.floor(s.hp).toLocaleString() }} / {{ maxHpOf(s).toLocaleString() }}</span>
         <span>灵力 {{ Math.floor(s.spirit).toLocaleString() }} / {{ cost() ? cost().toLocaleString() : "—" }}</span>
         <span>
           增速 {{ speedOf(s).toFixed(1) }} / 息
@@ -110,27 +133,88 @@ onBeforeUnmount(() => {
         </span>
         <span>历时 {{ Math.floor(s.days).toLocaleString() }} 日</span>
       </div>
+      <div class="bar"><div class="fill" :style="{ width: pct + '%' }"></div></div>
       <button class="act" :disabled="!canAct()" @click="doAct">{{ btnText() }}</button>
       <div class="sub-actions">
-        <button class="mini" :disabled="meditating()" @click="meditate(s); syncLogs()">
+        <button class="mini" :disabled="meditating() || !!s.enemy" @click="meditate(s); syncLogs()">
           入定（×2.5 / 10息）
         </button>
         <button class="mini" :disabled="s.stones <= 0" @click="stoneToSpirit(s); syncLogs()">
           灵石化灵（1石=10灵力）
         </button>
+        <button class="mini" :disabled="!!s.enemy" @click="enterDungeon(s); syncLogs()">
+          探秘{{ DUNGEON.name }}（{{ DUNGEON.fee }}石）
+        </button>
       </div>
-      <p v-if="!isFinal() && isTopStage()" class="warn">
+      <p v-if="!isFinal() && isTopStage() && !s.enemy" class="warn">
         突破成功率 {{ Math.round(breakChance() * 100) }}%（功法加成已计入）—— 失败恐遭天劫反噬
       </p>
+      <p v-if="!dungeonOpen() && !s.enemy" class="dim">
+        秘境之门紧闭：需修至{{ stageLabel(s.realm, 3) }}方可踏入{{ DUNGEON.name }}。
+      </p>
+    </section>
+
+    <!-- 战斗 / 秘境 -->
+    <section class="card" v-if="s.enemy || s.dungeon">
+      <h2>
+        {{ s.dungeon ? `秘境·${DUNGEON.name} 第 ${s.dungeon.room + 1}/${s.dungeon.total} 重` : "遭遇战" }}
+        <em v-if="enemy() && enemyDef()?.boss" class="boss-tag">领主</em>
+      </h2>
+      <div v-if="s.enemy" class="battle">
+        <div class="foe">
+          <b>{{ enemyDef()?.name }}</b>
+          <div class="bar foe-bar"><div class="fill foe-fill" :style="{ width: (s.enemy.hp / s.enemy.maxHp) * 100 + '%' }"></div></div>
+          <span class="dim">{{ Math.max(0, Math.floor(s.enemy.hp)) }} / {{ s.enemy.maxHp }} 气血</span>
+        </div>
+        <div class="spell-row">
+          <button
+            v-for="sp in SPELLS"
+            :key="sp.id"
+            class="mini spell"
+            :disabled="!canCast(sp.id)"
+            :title="sp.desc"
+            @click="castSpell(s, sp.id); syncLogs()"
+          >
+            {{ sp.name }}<small>（{{ sp.cost }}灵）</small>
+          </button>
+        </div>
+        <div class="inv-row">
+          <button
+            v-for="it in invEntries()"
+            :key="it.def.id"
+            class="mini"
+            @click="useItem(s, it.def.id); syncLogs()"
+          >
+            用·{{ it.def.name }}×{{ it.n }}
+          </button>
+          <span v-if="!invEntries().length" class="dim">（无可用之物）</span>
+        </div>
+      </div>
+      <p v-else class="dim">洞府幽暗中，你缓步前行……</p>
+    </section>
+
+    <!-- 背包 / 商行 -->
+    <section class="card">
+      <h2>储物袋 / 商行</h2>
+      <div class="shop">
+        <div v-for="it in ITEMS" :key="it.id" class="shop-item">
+          <b>{{ it.name }}</b><small>{{ it.desc }}</small>
+          <button class="mini" :disabled="!!s.enemy || s.stones < it.price" @click="buyItem(s, it.id); syncLogs()">
+            购（{{ it.price }}石）
+          </button>
+          <button class="mini" :disabled="!s.inv[it.id]" @click="useItem(s, it.id); syncLogs()">
+            用（{{ s.inv[it.id] ?? 0 }}）
+          </button>
+        </div>
+      </div>
+      <p class="dim" v-if="s.dungeonClears">秘境通关 {{ s.dungeonClears }} 次。</p>
     </section>
 
     <section class="card">
       <h2>宗门任务</h2>
       <div class="mission" v-if="mission()">
         <div class="m-name">{{ mission()!.name }} <em class="m-desc">—— {{ mission()!.desc }}</em></div>
-        <div class="m-req">
-          达成条件：{{ stageLabel(mission()!.realm, mission()!.stage) }}
-        </div>
+        <div class="m-req">达成条件：{{ stageLabel(mission()!.realm, mission()!.stage) }}</div>
         <div class="m-reward">
           赏赐：灵石 {{ mission()!.stones.toLocaleString() }}
           <template v-if="mission()!.spirit">，灵力 {{ mission()!.spirit.toLocaleString() }}</template>
@@ -176,7 +260,7 @@ onBeforeUnmount(() => {
 
     <footer>
       <span>《凡人修仙传》同人玩法 · 仅取世界观设定</span>
-      <span>M1 · 功法 / 宗门任务 / 灵石</span>
+      <span>M2 · 战斗 / 秘境 / 法术 / 商行</span>
       <button class="reset" @click="doReset">转世重修（清档）</button>
     </footer>
   </div>
