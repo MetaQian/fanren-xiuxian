@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { DUNGEON, ITEMS, HERBS, PILLS, TOWER, PETS, PET_BLOOD, METHODS, MISSIONS, REALMS, SPELLS, MAP_NODES, type MapNodeDef, type HerbDef, type PillDef } from "./game/data";
+import { DUNGEON, ITEMS, HERBS, PILLS, PETS, PET_BLOOD, METHODS, MISSIONS, REALMS, SPELLS, MAP_NODES, type MapNodeDef, type HerbDef, type PillDef } from "./game/data";
 import {
   type GameState,
   type LogEntry,
@@ -15,7 +15,6 @@ import {
   dungeonOpen,
   enemyOf,
   enterDungeon,
-  enterTower,
   evolvePet,
   hatchPet,
   itemDef,
@@ -95,7 +94,7 @@ const TABS = [
   { id: "zong", name: "宗门", ico: "🏯" },
 ] as const;
 // 战斗中（立绘与各 Tab 面板让位给战斗整屏）
-const inBattle = computed(() => !!(s.value.enemy || s.value.dungeon || s.value.tower));
+const inBattle = computed(() => !!(s.value.enemy || s.value.dungeon));
 // 修行者立绘（按境界变化，水墨立像）
 const FIGURES = ["🧒", "🧑‍🎓", "🧙", "🧘", "🧚", "⚡", "☁️"];
 function figureGlyph() {
@@ -226,7 +225,6 @@ const ICONS: Record<string, string> = {
 };
 const ico = (id?: string) => {
   if (!id) return "✦";
-  if (id.startsWith("tower:")) return "👹";
   if (id.startsWith("egg_")) return "🥚";
   return ICONS[id] ?? "✦";
 };
@@ -450,7 +448,7 @@ onBeforeUnmount(() => {
       </div>
       <button class="act" :disabled="!canAct()" @click="doAct">{{ btnText() }}</button>
       <p v-if="actHint()" class="act-hint">{{ actHint() }}</p>
-      <p class="dim mi-hint">⛰️ 探秘 · 登塔 · 行脚山水 → 见底部「秘境」</p>
+      <p class="dim mi-hint">⛰️ 探秘 · 行脚山水 → 见底部「秘境」</p>
       <!-- 入定：时长可调 + 条上预览（浅蓝段） -->
       <div class="stone-panel">
         <p class="sp-title">🧘 入定（速度 ×2.5）· 灵力条浅蓝段 = 入定后预计灵力</p>
@@ -564,10 +562,10 @@ onBeforeUnmount(() => {
     </section>
 
     <!-- 战斗 / 秘境 -->
-    <section class="card" v-if="s.enemy || s.dungeon || s.tower">
+    <section class="card" v-if="s.enemy || s.dungeon">
       <h2>
-        {{ s.dungeon ? `🕳️ 秘境·${DUNGEON.name} 第 ${s.dungeon.room + 1}/${s.dungeon.total} 重` : s.tower ? `🗼 镇岳塔 第 ${s.tower.floor} 层` : "⚔️ 遭遇战" }}
-        <em v-if="enemy() && enemyDef()?.boss" class="boss-tag">{{ s.tower ? "镇守" : "领主" }}</em>
+        {{ s.dungeon ? `🕳️ 秘境·${DUNGEON.name} 第 ${s.dungeon.room + 1}/${s.dungeon.total} 重` : "⚔️ 遭遇战" }}
+        <em v-if="enemy() && enemyDef()?.boss" class="boss-tag">领主</em>
       </h2>
       <div v-if="s.enemy" class="battle">
         <div class="foe">
@@ -649,7 +647,7 @@ onBeforeUnmount(() => {
       <p v-else class="dim">尚无灵兽。商行有售灵兽蛋（灵狐/青鳞蛇/麒麟/真龙），购得后点「用」孵化认主。</p>
     </section>
 
-    <!-- 秘境大厅（Tab：秘境）· 探秘 / 登塔 / 行脚山水 -->
+    <!-- 秘境大厅（Tab：秘境）· 探秘 / 行脚山水 -->
     <section class="card mi-panel" v-show="mainTab === 'mi' && !inBattle">
       <h2>🗺️ 秘境大厅</h2>
       <p class="dim mi-intro">七玄门之外的山水之间，藏着机缘，也藏着杀机。择一处入内，搏一个前程。</p>
@@ -663,21 +661,8 @@ onBeforeUnmount(() => {
           <div class="mi-foot">
             <span class="dim" v-if="!canDungeon() && !s.enemy">尚须境界（现{{ stageLabel(s.realm, s.stage) }}）</span>
             <span class="dim" v-else-if="s.dungeonClears">已通关 {{ s.dungeonClears }} 次</span>
-            <button class="mini sp-go" :disabled="!!s.enemy || !!s.dungeon || !!s.tower || !canDungeon()" @click="enterDungeon(s); flushToasts()">
+            <button class="mini sp-go" :disabled="!!s.enemy || !!s.dungeon || !canDungeon()" @click="enterDungeon(s); flushToasts()">
               入内探秘（{{ DUNGEON.fee }}石）
-            </button>
-          </div>
-        </div>
-        <div class="mi-card">
-          <div class="mi-head">
-            <b>🗼 {{ TOWER.name }}</b>
-            <span class="mi-tag">无限层 · 镇守</span>
-          </div>
-          <p class="dim">后山老塔，前代掌门镇煞所立。怪随层加深，每五层有镇守，每十层有赏赐。失手即被震出。</p>
-          <div class="mi-foot">
-            <span class="dim" v-if="s.towerBest">最高曾至第 {{ s.towerBest }} 层</span>
-            <button class="mini sp-go" :disabled="!!s.enemy || !!s.tower || !!s.dungeon || s.stones < TOWER.fee" @click="enterTower(s); flushToasts()">
-              登塔（{{ TOWER.fee }}石）
             </button>
           </div>
         </div>
