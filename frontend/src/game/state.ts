@@ -512,6 +512,7 @@ function enterRoom(s: GameState, room: number): void {
     const gain = rnd(30, 80) * (1 + s.realm);
     s.stones += gain;
     pushLog(s, `第 ${room + 1} 房：石壁暗格中藏着一袋灵石 +${gain}。`, "good");
+    advanceRoom(s);
   } else if (kind === "hazard") {
     const roll = Math.random();
     if (roll < 0.5) {
@@ -523,11 +524,7 @@ function enterRoom(s: GameState, room: number): void {
       s.hp = Math.min(maxHpOf(s), s.hp + gain);
       pushLog(s, `第 ${room + 1} 房：一池灵泉汩汩而流，气血 +${gain.toLocaleString()}。`, "good");
     }
-    s.dungeon.room += 1;
-    if (s.dungeon.room >= s.dungeon.total) {
-      // 理论上不会发生（末房为 boss），兜底
-      s.dungeon = null;
-    }
+    advanceRoom(s);
   } else {
     const boss = kind === "boss";
     const def = pickEnemy(s, boss);
@@ -537,6 +534,20 @@ function enterRoom(s: GameState, room: number): void {
       `第 ${room + 1} 房${boss ? "【领主】" : ""}：${def.flavor}${boss ? ` 是【${def.name}】！` : ""}`,
       boss ? "break" : "info",
     );
+  }
+}
+
+// 非战斗房（宝藏/祸）前进一房；末房兜底
+function advanceRoom(s: GameState): void {
+  if (!s.dungeon) return;
+  s.dungeon.room += 1;
+  if (s.dungeon.room >= s.dungeon.total) {
+    // 理论上末房必为 boss 触发 winFight 清场，此为兜底
+    s.dungeon = null;
+    s.armorTurns = 0;
+    s.bellActive = false;
+  } else {
+    enterRoom(s, s.dungeon.room);
   }
 }
 
