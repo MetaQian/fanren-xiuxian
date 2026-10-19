@@ -121,7 +121,13 @@ function medTotal() {
   return medBaseSpeed() * MEDITATE_MUL * medSec.value;
 }
 function doMeditate() {
-  meditate(s.value, medSec.value);
+  const sec = Math.floor(Number(medSec.value));
+  if (!isFinite(sec) || sec < 1) {
+    toastOnce("请输入入定时长（息）。");
+    return;
+  }
+  medSec.value = sec;
+  meditate(s.value, sec);
   flushToasts();
 }
 // 入定剩余秒数（模板里取不到 Date，用函数算）
@@ -278,20 +284,28 @@ onBeforeUnmount(() => {
         </button>
       </div>
       <!-- 入定：时长可调 + 条上预览（浅蓝段） -->
-      <div class="stone-panel med-panel">
-        <p class="sp-title">
-          入定（速度 ×2.5）· 入定 {{ medSec }} 息可得灵力约 +{{ Math.round(medTotal()).toLocaleString() }}
-          <em v-if="meditating()" class="stat">入定中（余 {{ medLeft() }} 息）</em>
-        </p>
+      <div class="stone-panel">
+        <p class="sp-title">入定（速度 ×2.5）· 灵力条浅蓝段 = 入定后预计灵力</p>
         <div class="sp-row">
-          <button class="mini sp-preset" :class="{ on: medSec === 5 }" @click="medSec = 5">5息</button>
-          <button class="mini sp-preset" :class="{ on: medSec === 10 }" @click="medSec = 10">10息</button>
-          <button class="mini sp-preset" :class="{ on: medSec === 20 }" @click="medSec = 20">20息</button>
-          <button class="mini sp-preset" :class="{ on: medSec === 30 }" @click="medSec = 30">30息</button>
-          <span class="sp-preview dim">灵力条浅蓝段 = 入定后预计灵力</span>
+          <input
+            class="sp-input"
+            type="number"
+            min="1"
+            max="60"
+            placeholder="时长（息）"
+            v-model.number="medSec"
+          />
+          <button class="mini sp-preset" :class="{ on: medSec === 5 }" @click="medSec = 5">5</button>
+          <button class="mini sp-preset" :class="{ on: medSec === 10 }" @click="medSec = 10">10</button>
+          <button class="mini sp-preset" :class="{ on: medSec === 20 }" @click="medSec = 20">20</button>
+          <button class="mini sp-preset" :class="{ on: medSec === 30 }" @click="medSec = 30">30</button>
         </div>
         <div class="sp-row">
-          <button class="sp-go" :disabled="meditating() || !!s.enemy" @click="doMeditate">
+          <span class="sp-preview" v-if="medSec >= 1">
+            入定 {{ Math.floor(medSec) }} 息 → 灵力 <b>+{{ Math.round(medTotal()).toLocaleString() }}</b>
+            <em v-if="meditating()" class="stat">（入定中 余 {{ medLeft() }} 息）</em>
+          </span>
+          <button class="sp-go" :disabled="medSec < 1 || meditating() || !!s.enemy" @click="doMeditate">
             {{ meditating() ? "入定中 · 不可重入" : "入 定" }}
           </button>
         </div>
