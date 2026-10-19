@@ -496,6 +496,21 @@ onBeforeUnmount(() => {
             <button class="mini herb-buy" :disabled="s.stones < h.price" @click="buyH(h.id)">购{{ h.price }}石</button>
           </span>
         </div>
+        <!-- 丹药袋：非战斗时可服用 -->
+        <div class="pillbag-row" v-if="!s.enemy">
+          <button
+            v-for="p in PILLS.filter((x) => invN(x.id) > 0)"
+            :key="p.id"
+            class="mini pillbag"
+            :title="pillEffect(p)"
+            @click="useItem(s, p.id); flushToasts()"
+          >
+            服·{{ ico(p.id) }}{{ p.name }}×{{ invN(p.id) }}
+          </button>
+          <span class="dim" v-if="!PILLS.some((x) => invN(x.id) > 0)">
+            丹药袋空——炼成丹药后可在此服用（回春/聚气/破境/凝气）
+          </span>
+        </div>
       </div>
       <p v-if="!isFinal() && isTopStage() && !s.enemy" class="warn">
         突破成功率 {{ Math.round(breakChance() * 100) }}%（功法加成已计入{{ s.breakPillStacks > 0 ? `，破境丹 ${s.breakPillStacks} 层待用 +${s.breakPillStacks * 15}%` : "" }}）—— 失败恐遭天劫反噬

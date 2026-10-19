@@ -1024,3 +1024,13 @@ footer .reset:hover {
   padding: 1px 8px;
   font-size: 11px;
 }
+.pillbag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: center;
+}
+.pillbag {
+  border-color: rgba(255, 215, 130, 0.3);
+}
