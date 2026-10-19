@@ -162,6 +162,7 @@ export interface ItemDef {
   blockPct?: number;
   blockTurns?: number;
   combatOnly?: boolean;
+  petId?: string; // 灵兽蛋：孵化出该灵兽（仅非战斗可用）
   desc: string;
 }
 
@@ -169,6 +170,13 @@ export const ITEMS: ItemDef[] = [
   { id: "heal", name: "回灵丹", price: 60, healPct: 0.5, desc: "回复 50% 气血。" },
   { id: "gather", name: "聚灵丹", price: 40, spirit: 1, desc: "炼化得灵力（随境界增长）。" },
   { id: "armor", name: "灵甲符", price: 100, blockPct: 0.5, blockTurns: 3, combatOnly: true, desc: "接下来 3 次受击 -50%（仅战斗中）。" },
+  // M4：灵兽蛋（七玄门灵兽园发售，战斗外孵化认主）
+  { id: "egg_fox", name: "灵狐蛋", price: 150, petId: "fox", desc: "灵兽园新蛋，孵化得一头认主灵兽。" },
+  { id: "egg_serp", name: "青鳞蛇蛋", price: 500, petId: "serp", desc: "青鳞盘绕，血脉不凡。" },
+  { id: "egg_qilin", name: "麒麟蛋", price: 2000, petId: "qilin", desc: "灵兽园镇园之宝，圣种血脉。" },
+  { id: "egg_dragon", name: "真龙蛋", price: 8000, petId: "dragon", desc: "传说之物，神种血脉，一吼山岳皆颤。" },
+  // M4：血脉丹（喂灵兽尝试升血脉，失败丹碎不进阶）
+  { id: "blood_pill", name: "血脉丹", price: 400, desc: "喂灵兽尝试升血脉（凡→灵→玄→圣→神），越往上成功率越低。" },
 ];
 
 // ===== M3：炼丹（仿一念逍遥 random_drug：药材→丹方→成功率→功效）=====
@@ -279,8 +287,31 @@ export const TOWER_ELITES = [
   "镇岳守煞",
 ];
 
-// ===== M2.5：场景地图（开放世界基础：节点 + 邻接 + 境界解锁 + 地点效果） =====
+// ===== M4：灵兽（七玄门灵兽园，对标一念逍遥 pet_blood 血脉 + pet_change 变异）=====
+// 世界观：灵兽园发售灵兽蛋，孵化认主；喂血脉丹可进阶血脉（凡→灵→玄→圣→神）。
+// 灵兽只加攻击与被动产出，不加气血（避免污染怪物缩放基准 maxHpOf）。
+export interface PetDef {
+  id: string;
+  name: string;
+  icon: string;
+  atk: number[]; // 血脉 1-5：攻击加成（占玩家 maxHp 的比例）
+  stone: number[]; // 血脉 1-5：每 10 秒被动产出灵石
+  desc: string;
+}
+export const PETS: PetDef[] = [
+  { id: "fox", name: "灵狐", icon: "🦊", atk: [0.02, 0.03, 0.05, 0.08, 0.12], stone: [2, 3, 5, 8, 12], desc: "狡黠机灵，最会替主人搜刮灵石。" },
+  { id: "serp", name: "青鳞蛇", icon: "🐍", atk: [0.04, 0.07, 0.11, 0.16, 0.24], stone: [1, 2, 3, 5, 7], desc: "獠牙淬毒，攻强。" },
+  { id: "qilin", name: "麒麟", icon: "🦄", atk: [0.05, 0.08, 0.13, 0.2, 0.3], stone: [1, 2, 4, 6, 9], desc: "瑞兽之姿，攻守兼备。" },
+  { id: "dragon", name: "真龙", icon: "🐉", atk: [0.08, 0.14, 0.22, 0.34, 0.5], stone: [2, 4, 7, 11, 16], desc: "一吼山岳皆颤，神种血脉。" },
+];
+// 血脉进阶：喂一枚血脉丹尝试升阶，成功率递减，失败丹碎（不进阶）
+export const PET_BLOOD = {
+  names: ["凡", "灵", "玄", "圣", "神"], // 血脉 1-5 名号
+  evolveItem: "blood_pill", // 升阶所需物品 id
+  evolveChance: [0.9, 0.65, 0.4, 0.2], // 升到血脉 2/3/4/5 的成功率
+};
 
+// ===== M2.5：场景地图（开放世界基础：节点 + 邻接 + 境界解锁 + 地点效果） =====
 export interface MapNodeDef {
   id: string;
   name: string;

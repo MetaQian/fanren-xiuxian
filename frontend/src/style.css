@@ -1034,3 +1034,56 @@ footer .reset:hover {
 .pillbag {
   border-color: rgba(255, 215, 130, 0.3);
 }
+
+/* ===== M4：灵兽栏 ===== */
+.pet-panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pet-count {
+  font-size: 12px;
+  font-style: normal;
+  color: #8a8578;
+}
+.pet-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.pet-card {
+  border: 1px solid rgba(255, 215, 130, 0.25);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.18);
+}
+.pet-name {
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pet-blood {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  align-self: flex-start;
+  border: 1px solid currentColor;
+}
+.pet-blood.b1 { color: #b8b2a6; }
+.pet-blood.b2 { color: #6fcf97; }
+.pet-blood.b3 { color: #5aa9e6; }
+.pet-blood.b4 { color: #b07fe6; }
+.pet-blood.b5 { color: #f0a83c; }
+.pet-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #d8d2c4;
+}
+.pet-card .mini {
+  align-self: flex-start;
+}

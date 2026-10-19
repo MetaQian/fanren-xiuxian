@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { DUNGEON, ITEMS, HERBS, PILLS, TOWER, METHODS, MISSIONS, REALMS, SPELLS, MAP_NODES, type MapNodeDef, type HerbDef, type PillDef } from "./game/data";
+import { DUNGEON, ITEMS, HERBS, PILLS, TOWER, PETS, PET_BLOOD, METHODS, MISSIONS, REALMS, SPELLS, MAP_NODES, type MapNodeDef, type HerbDef, type PillDef } from "./game/data";
 import {
   type GameState,
   type LogEntry,
@@ -16,6 +16,8 @@ import {
   enemyOf,
   enterDungeon,
   enterTower,
+  evolvePet,
+  hatchPet,
   itemDef,
   load,
   maxHpOf,
@@ -25,6 +27,7 @@ import {
   nextCost,
   nodeUnlocked,
   nodeLockText,
+  petDef,
   retreat,
   resetGame,
   save,
@@ -206,6 +209,7 @@ const ICONS: Record<string, string> = {
 const ico = (id?: string) => {
   if (!id) return "✦";
   if (id.startsWith("tower:")) return "👹";
+  if (id.startsWith("egg_")) return "🥚";
   return ICONS[id] ?? "✦";
 };
 const toastIco = (k: string) => (k === "break" ? "⚡" : k === "good" ? "🌿" : k === "bad" ? "🗡️" : "📜");
@@ -588,6 +592,30 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <p class="dim" v-if="s.dungeonClears">秘境通关 {{ s.dungeonClears }} 次。</p>
+    </section>
+
+    <!-- M4：灵兽栏（七玄门灵兽园：孵化认主 + 血脉进阶） -->
+    <section class="card pet-panel">
+      <h2>🐾 灵兽栏 <em class="pet-count">{{ s.pets.length }}/5 只</em></h2>
+      <div v-if="s.pets.length" class="pet-list">
+        <div v-for="(pet, i) in s.pets" :key="i" class="pet-card">
+          <b class="pet-name">{{ petDef(pet.id)?.icon }} {{ petDef(pet.id)?.name }}</b>
+          <span class="pet-blood b{{ pet.blood }}">血脉·{{ PET_BLOOD.names[pet.blood - 1] }}</span>
+          <div class="pet-stats">
+            <span>攻 +{{ Math.round(maxHpOf(s) * (petDef(pet.id)?.atk[pet.blood - 1] ?? 0)).toLocaleString() }}</span>
+            <span>💎 {{ petDef(pet.id)?.stone[pet.blood - 1] }}/10息</span>
+          </div>
+          <button
+            class="mini"
+            :disabled="pet.blood >= 5 || !s.inv['blood_pill']"
+            @click="evolvePet(s, i); flushToasts()"
+            title="喂一枚血脉丹尝试升血脉"
+          >
+            喂血脉丹（{{ s.inv['blood_pill'] ?? 0 }}）
+          </button>
+        </div>
+      </div>
+      <p v-else class="dim">尚无灵兽。商行有售灵兽蛋（灵狐/青鳞蛇/麒麟/真龙），购得后点「用」孵化认主。</p>
     </section>
 
     <section class="card">

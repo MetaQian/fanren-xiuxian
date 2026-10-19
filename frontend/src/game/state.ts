@@ -8,6 +8,8 @@ import {
   METHODS,
   MISSIONS,
   PILLS,
+  PETS,
+  PET_BLOOD,
   SPELLS,
   TOWER,
   TOWER_ELITES,
@@ -17,6 +19,7 @@ import {
   type ItemDef,
   type MapNodeDef,
   type MethodDef,
+  type PetDef,
   type PillDef,
   type SpellDef,
   CN_NUM,
@@ -66,6 +69,8 @@ export interface GameState {
   breakPillStacks: number; // 破境丹层数（0-3，大突破时消耗）
   tower: { floor: number } | null; // 镇岳塔本次登塔进度（null=不在塔内）
   towerBest: number; // 镇岳塔历史最高层
+  pets: { id: string; blood: number }[]; // 灵兽：id + 血脉等级(1-5)
+  petStoneAcc: number; // 灵兽灵石被动产出累加器（<1 时攒着）
   logs: LogEntry[];
   lastSave: number;
   created: number;
@@ -177,7 +182,12 @@ export function tryWildEncounter(s: GameState, node?: MapNodeDef, dtSec = 1): vo
 }
 
 export function atkOf(s: GameState): number {
-  return Math.round(maxHpOf(s) * 0.3);
+  let v = maxHpOf(s) * 0.3;
+  for (const p of s.pets) {
+    const pd = PETS.find((x) => x.id === p.id);
+    if (pd) v += maxHpOf(s) * pd.atk[p.blood - 1]; // 灵兽助战
+  }
+  return Math.round(v);
 }
 
 export function enemyOf(s: GameState): EnemyDef | null {
@@ -264,6 +274,8 @@ export function newGame(): GameState {
     breakPillStacks: 0,
     tower: null,
     towerBest: 0,
+    pets: [],
+    petStoneAcc: 0,
     logs: [],
     lastSave: Date.now(),
     created: Date.now(),
@@ -311,6 +323,19 @@ export function load(): GameState {
     // 离线疗伤：气血缓慢恢复（30% 每秒，上限满值）
     s.hp = Math.min(maxHpOf(s), s.hp + Math.floor(dt * maxHpOf(s) * 0.003));
     pushLog(s, `闭关 ${Math.floor(dt).toLocaleString()} 日（离线按五成速度），得灵力 ${gain.toLocaleString()}。`, "info");
+    // 离线灵兽被动产出（同离线灵力，五成速度）
+    if (s.pets.length) {
+      let rate = 0;
+      for (const p of s.pets) {
+        const pd = PETS.find((x) => x.id === p.id);
+        if (pd) rate += pd.stone[p.blood - 1] / 10;
+      }
+      const stoneGain = Math.floor(rate * dt * OFFLINE_RATE);
+      if (stoneGain > 0) {
+        s.stones += stoneGain;
+        pushLog(s, `灵兽离线觅得灵石 ${stoneGain}。`, "good");
+      }
+    }
     checkMissions(s);
   }
   // 离线期间丹炉若已毕，回档即结算
@@ -326,6 +351,20 @@ export function tick(s: GameState, dtSec: number): void {
   s.hp = Math.min(maxHpOf(s), s.hp + (maxHpOf(s) / 10) * (dtSec / 10));
   // 丹炉推进
   if (s.alch && Date.now() >= s.alch.until) resolveBrew(s);
+  // 灵兽：被动产出灵石（每 10 秒 stone[blood-1]，按秒折算累加）
+  if (s.pets.length) {
+    let rate = 0;
+    for (const p of s.pets) {
+      const pd = PETS.find((x) => x.id === p.id);
+      if (pd) rate += pd.stone[p.blood - 1] / 10; // 灵石/秒
+    }
+    s.petStoneAcc += rate * dtSec;
+    const add = Math.floor(s.petStoneAcc);
+    if (add > 0) {
+      s.petStoneAcc -= add;
+      s.stones += add;
+    }
+  }
   // 野外：每秒按概率遭遇
   tryWildEncounter(s, undefined, dtSec);
 }
@@ -511,11 +550,72 @@ export function buyItem(s: GameState, id: string): void {
   save(s);
 }
 
+// ===== M4：灵兽（孵化认主 + 血脉进阶）=====
+
+export function petDef(id: string): PetDef | undefined {
+  return PETS.find((p) => p.id === id);
+}
+
+// 孵化灵兽蛋：战斗外使用，认主加入灵兽栏（同一灵兽可养多只，血脉独立）
+export function hatchPet(s: GameState, itemId: string): void {
+  const it = itemDef(itemId);
+  if (!it?.petId || !s.inv[itemId]) return;
+  if (s.enemy) {
+    pushLog(s, "生死搏杀中，无暇孵化灵兽蛋。", "info");
+    return;
+  }
+  if (s.pets.length >= 5) {
+    pushLog(s, "灵兽栏已满（5 只），先遣散或另寻安置。", "info");
+    return;
+  }
+  s.inv[itemId] -= 1;
+  if (s.inv[itemId] <= 0) delete s.inv[itemId];
+  const pd = petDef(it.petId);
+  s.pets.push({ id: it.petId, blood: 1 });
+  pushLog(s, `灵兽蛋孵化！【${pd?.name ?? it.petId}】认主而来，血脉【${PET_BLOOD.names[0]}】。`, "break");
+  save(s);
+}
+
+// 喂血脉丹：尝试升血脉，成功率递减，失败丹碎不进阶
+export function evolvePet(s: GameState, idx: number): void {
+  const pet = s.pets[idx];
+  if (!pet) return;
+  if (pet.blood >= 5) {
+    pushLog(s, "此兽血脉已臻【神】之极，再无进阶。", "info");
+    return;
+  }
+  const pillId = PET_BLOOD.evolveItem;
+  if (!s.inv[pillId]) {
+    pushLog(s, "无【血脉丹】可喂（商行有售）。", "info");
+    return;
+  }
+  const chance = PET_BLOOD.evolveChance[pet.blood - 1];
+  s.inv[pillId] -= 1;
+  if (s.inv[pillId] <= 0) delete s.inv[pillId];
+  const pd = petDef(pet.id);
+  if (Math.random() < chance) {
+    pet.blood += 1;
+    pushLog(s, `【${pd?.name}】血脉进阶至【${PET_BLOOD.names[pet.blood - 1]}】！攻击与灵慧大增。`, "break");
+  } else {
+    pushLog(s, `【${pd?.name}】炼化血脉丹时丹碎药散，血脉未变（成功率 ${Math.round(chance * 100)}%）。`, "bad");
+  }
+  save(s);
+}
+
 // 使用物品：战斗外可用回灵丹/聚灵丹；灵甲符仅战斗中生效；炼制的丹药按丹方效果
 export function useItem(s: GameState, id: string): void {
   const it = itemDef(id);
   const pill = PILLS.find((p) => p.id === id);
   if ((!it && !pill) || !s.inv[id]) return;
+  // M4：灵兽蛋 → 转孵化认主；血脉丹 → 须去灵兽栏喂（非通用丹药）
+  if (it?.petId) {
+    hatchPet(s, id);
+    return;
+  }
+  if (it && id === PET_BLOOD.evolveItem) {
+    pushLog(s, "【血脉丹】须到「灵兽栏」里喂给灵兽，不可直接吞服。", "info");
+    return;
+  }
   if (it?.combatOnly) {
     if (!s.enemy) {
       pushLog(s, "灵甲符需面对敌人时方可祭出。", "info");
