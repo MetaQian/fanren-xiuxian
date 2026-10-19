@@ -60,17 +60,25 @@ const missionDone = (m: (typeof MISSIONS)[number]) =>
   s.value.realm > m.realm || (s.value.realm === m.realm && s.value.stage >= m.stage);
 
 let timer: number | undefined;
+const onHide = () => save(s.value);
 onMounted(() => {
+  save(s.value); // 立即落一次初始存档，避免首次刷新丢失
   timer = window.setInterval(() => {
     tick(s.value, 1);
     checkMissions(s.value);
-    if (Math.floor(s.value.days) % 10 === 0) save(s.value);
+    // 每 5 秒至少落盘一次，不依赖页面退出事件
+    if (Date.now() - s.value.lastSave >= 5000) save(s.value);
   }, 1000);
-  window.addEventListener("beforeunload", save);
+  window.addEventListener("beforeunload", onHide);
+  window.addEventListener("pagehide", onHide);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") save(s.value);
+  });
 });
 onBeforeUnmount(() => {
   if (timer !== undefined) window.clearInterval(timer);
-  window.removeEventListener("beforeunload", save);
+  window.removeEventListener("beforeunload", onHide);
+  window.removeEventListener("pagehide", onHide);
 });
 </script>
 
