@@ -59,7 +59,7 @@ const OFFLINE_CAP_SEC = 8 * 3600; // 离线最多结算 8 小时
 const OFFLINE_RATE = 0.5; // 离线五成速度
 const MEDITATE_SEC = 10; // 入定持续时间
 const MEDITATE_MUL = 2.5; // 入定速度倍率
-const STONE_TO_SPIRIT = 10; // 1 灵石抵 10 灵力
+export const STONE_TO_SPIRIT = 10; // 1 灵石抵 10 灵力
 const INJURE_SEC = 180; // 重伤时长
 const DUNGEON_MIN_STAGE = 3; // 秘境要求：本境界第 3 小境
 
@@ -280,17 +280,17 @@ export function meditate(s: GameState): void {
   save(s);
 }
 
-// 灵石抵灵力：1 灵石 = 10 灵力（灵石全换）
-export function stoneToSpirit(s: GameState): void {
+// 灵石抵灵力：1 灵石 = 10 灵力（按指定数量兑换）
+export function stoneToSpirit(s: GameState, n: number): void {
   if (s.stones <= 0) {
     pushLog(s, "囊中无石，无可兑换。", "info");
     return;
   }
-  const n = s.stones;
-  const gain = n * STONE_TO_SPIRIT;
-  s.stones = 0;
+  const num = Math.max(1, Math.min(Math.floor(n), s.stones));
+  const gain = num * STONE_TO_SPIRIT;
+  s.stones -= num;
   s.spirit += gain;
-  pushLog(s, `将 ${n} 枚灵石融入灵台，灵力 +${gain.toLocaleString()}。`, "good");
+  pushLog(s, `将 ${num.toLocaleString()} 枚灵石融入灵台，灵力 +${gain.toLocaleString()}。`, "good");
   save(s);
 }
 

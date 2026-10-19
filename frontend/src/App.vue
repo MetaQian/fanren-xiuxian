@@ -23,6 +23,7 @@ import {
   save,
   speedOf,
   stageLabel,
+  STONE_TO_SPIRIT,
   stoneToSpirit,
   tick,
   useItem,
@@ -104,6 +105,42 @@ const btnText = () => {
   return isTopStage() ? `冲击${REALMS[s.value.realm + 1].name}` : "修 炼";
 };
 const canAct = () => !s.value.enemy && !isFinal() && s.value.spirit >= cost();
+// 灵力条目标文案：冲哪个突破
+const costTarget = () => {
+  if (isFinal()) return "静待飞升";
+  return isTopStage() ? `冲击${REALMS[s.value.realm + 1].name}` : `突破至${stageLabel(s.value.realm, s.value.stage + 1)}`;
+};
+
+// ===== 灵石化灵：可设数量 + 预览 =====
+const stoneAmt = ref(0); // 0 = 未设置
+const stoneCount = () => {
+  const n = Math.floor(Number(stoneAmt.value));
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(n, s.value.stones);
+};
+const stoneGainPreview = () => stoneCount() * STONE_TO_SPIRIT;
+function setStonePreset(n: number | "all") {
+  if (n === "all") stoneAmt.value = s.value.stones;
+  else stoneAmt.value = n;
+}
+function doStoneToSpirit() {
+  const n = stoneCount();
+  if (n <= 0) {
+    toastOnce("灵石不足或数量未设置。");
+    return;
+  }
+  stoneToSpirit(s.value, n);
+  stoneAmt.value = 0; // 用完清空，避免误连点
+  flushToasts();
+}
+let lastToastText = "";
+function toastOnce(text: string) {
+  if (lastToastText === text) return; // 避免同句重复弹
+  lastToastText = text;
+  const id = ++toastId;
+  toasts.value.push({ id, text, kind: "info" });
+  window.setTimeout(() => dismissToast(id), 3500);
+}
 // 按钮为何置灰：给玩家一个明确的原因，而不是干等
 const actHint = () => {
   if (s.value.enemy) return "战斗中不可修炼，先了结眼前之战。";
@@ -189,6 +226,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="realm-name">{{ stageLabel(s.realm, s.stage) }}</div>
       <p class="realm-note">{{ REALMS[s.realm].note }}（功法：{{ methodOf(s).name }}）</p>
+      <p class="bar-label">气血 · 生死之基</p>
       <div class="bar hp-bar"><div class="fill hp-fill" :style="{ width: hpPct + '%' }"></div></div>
       <div class="meta">
         <span>气血 {{ Math.floor(s.hp).toLocaleString() }} / {{ maxHpOf(s).toLocaleString() }}</span>
@@ -200,6 +238,7 @@ onBeforeUnmount(() => {
         </span>
         <span>历时 {{ Math.floor(s.days).toLocaleString() }} 日</span>
       </div>
+      <p class="bar-label">灵力 · 攒满即可{{ costTarget() }}</p>
       <div class="bar"><div class="fill" :style="{ width: pct + '%' }"></div></div>
       <button class="act" :disabled="!canAct()" @click="doAct">{{ btnText() }}</button>
       <p v-if="actHint()" class="act-hint">{{ actHint() }}</p>
@@ -207,12 +246,35 @@ onBeforeUnmount(() => {
         <button class="mini" :disabled="meditating() || !!s.enemy" @click="meditate(s); flushToasts()">
           入定（×2.5 / 10息）
         </button>
-        <button class="mini" :disabled="s.stones <= 0" @click="stoneToSpirit(s); flushToasts()">
-          灵石化灵（1石=10灵力）
-        </button>
         <button class="mini" :disabled="!!s.enemy" @click="enterDungeon(s); flushToasts()">
           探秘{{ DUNGEON.name }}（{{ DUNGEON.fee }}石）
         </button>
+      </div>
+      <!-- 灵石化灵：设数量 → 预览 → 确认 -->
+      <div class="stone-panel">
+        <p class="sp-title">灵石化灵（1 石 = 10 灵力，持有 {{ s.stones.toLocaleString() }} 石）</p>
+        <div class="sp-row">
+          <input
+            class="sp-input"
+            type="number"
+            min="1"
+            :max="s.stones"
+            placeholder="数量"
+            v-model="stoneAmt"
+          />
+          <button class="mini sp-preset" @click="setStonePreset(10)">10</button>
+          <button class="mini sp-preset" @click="setStonePreset(50)">50</button>
+          <button class="mini sp-preset" @click="setStonePreset(100)">100</button>
+          <button class="mini sp-preset" @click="setStonePreset('all')">全部</button>
+        </div>
+        <div class="sp-row">
+          <span class="sp-preview" v-if="stoneCount() > 0">
+            兑换 {{ stoneCount() }} 石 → 灵力 <b>+{{ stoneGainPreview().toLocaleString() }}</b>
+            <em v-if="stoneCount() >= cost() && cost() > 0" class="sp-ok">（够{{ costTarget() }}）</em>
+          </span>
+          <span class="sp-preview dim" v-else>输入数量，预览将增加的灵力</span>
+          <button class="sp-go" :disabled="stoneCount() <= 0" @click="doStoneToSpirit">确认化灵</button>
+        </div>
       </div>
       <p v-if="!isFinal() && isTopStage() && !s.enemy" class="warn">
         突破成功率 {{ Math.round(breakChance() * 100) }}%（功法加成已计入）—— 失败恐遭天劫反噬
