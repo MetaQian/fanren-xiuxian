@@ -90,7 +90,7 @@ export function maxHpOf(s: GameState): number {
 }
 
 export function atkOf(s: GameState): number {
-  return Math.round(maxHpOf(s) * 0.18);
+  return Math.round(maxHpOf(s) * 0.3);
 }
 
 export function enemyOf(s: GameState): EnemyDef | null {
@@ -348,7 +348,7 @@ export function useItem(s: GameState, id: string): void {
 
 export function spawnEnemy(s: GameState, def: EnemyDef): void {
   const hp = Math.round(maxHpOf(s) * def.hpMul);
-  s.enemy = { defId: def.id, hp, maxHp: hp, atk: Math.round(atkOf(s) * def.atkMul), boss: def.boss };
+  s.enemy = { defId: def.id, hp, maxHp: hp, atk: Math.round(maxHpOf(s) * def.atkMul), boss: def.boss };
 }
 
 function rnd(min: number, max: number): number {
@@ -421,8 +421,11 @@ function winFight(s: GameState, edef: EnemyDef): void {
   const spiritGain = Math.round(e.maxHp * 0.6);
   s.stones += stoneGain;
   s.spirit += spiritGain;
+  // 战后吐纳调息：恢复部分气血
+  const rest = Math.round(maxHpOf(s) * 0.28);
+  s.hp = Math.min(maxHpOf(s), s.hp + rest);
   if (edef.boss) s.karma += 1;
-  pushLog(s, `斩敌【${edef.name}】！获灵石 ${stoneGain}，灵力 +${spiritGain.toLocaleString()}${edef.boss ? "，因果 +1" : ""}。`, "good");
+  pushLog(s, `斩敌【${edef.name}】！获灵石 ${stoneGain}，灵力 +${spiritGain.toLocaleString()}，调息气血 +${rest}。`, "good");
   if (Math.random() < edef.itemChance) {
     const drop = ITEMS[rnd(0, ITEMS.length - 1)];
     s.inv[drop.id] = (s.inv[drop.id] ?? 0) + 1;
@@ -475,7 +478,7 @@ function loseFight(s: GameState, edef: EnemyDef): void {
 // ===== M2：秘境探索（启元洞府） =====
 
 // 房序：敌/宝/敌/祸/敌/Boss
-const ROOM_KINDS = ["enemy", "treasure", "enemy", "hazard", "enemy", "boss"] as const;
+const ROOM_KINDS = ["enemy", "treasure", "enemy", "hazard", "boss"] as const;
 type RoomKind = (typeof ROOM_KINDS)[number];
 
 export function dungeonOpen(s: GameState): boolean {
@@ -549,6 +552,23 @@ function advanceRoom(s: GameState): void {
   } else {
     enterRoom(s, s.dungeon.room);
   }
+}
+
+// 撤退：战斗中认怂。放弃当前秘境（若在内），不掉落灵石，仅受小伤。
+// 凡人保命第一——打不过就跑，这不是耻辱。
+export function retreat(s: GameState): void {
+  if (!s.enemy) return;
+  const dmg = Math.round(maxHpOf(s) * 0.1);
+  s.enemy = null;
+  s.hp = Math.max(1, s.hp - dmg);
+  s.armorTurns = 0;
+  s.bellActive = false;
+  pushLog(s, `咬破舌尖强行脱身，弃了这场争斗（气血 -${dmg}）。保命要紧，来日方长。`, "info");
+  if (s.dungeon) {
+    pushLog(s, "你遁出" + DUNGEON.name + "，石门在身后无声闭合。", "info");
+    s.dungeon = null;
+  }
+  save(s);
 }
 
 export function resetGame(): GameState {

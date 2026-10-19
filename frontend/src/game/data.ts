@@ -175,7 +175,7 @@ export interface EnemyDef {
   id: string;
   name: string;
   hpMul: number; // 相对玩家最大气血
-  atkMul: number; // 相对玩家攻击
+  atkMul: number; // 每回合伤害占玩家最大气血的比例（独立于玩家攻击，可单独调难度）
   stones: [number, number]; // 灵石掉落区间（×(1+境界)）
   itemChance: number; // 掉落物品概率
   realms: number[]; // 可出现的境界
@@ -184,18 +184,18 @@ export interface EnemyDef {
 }
 
 export const ENEMIES: EnemyDef[] = [
-  { id: "wolf", name: "凶狼", hpMul: 0.7, atkMul: 0.75, stones: [10, 20], itemChance: 0.25, realms: [0], flavor: "草丛中凶气骤起，一头凶狼扑出。" },
-  { id: "beast", name: "洞窟灵兽", hpMul: 1, atkMul: 0.8, stones: [15, 30], itemChance: 0.3, realms: [0, 1, 2], flavor: "石缝中滑出一头生有灵纹的灵兽。" },
-  { id: "raider", name: "采药散修", hpMul: 0.9, atkMul: 0.9, stones: [20, 40], itemChance: 0.4, realms: [0, 1], flavor: "对方冷笑：「留下财货，滚吧。」" },
-  { id: "mobei", name: "游荡魔修", hpMul: 1.1, atkMul: 1, stones: [30, 60], itemChance: 0.4, realms: [1, 2, 3], flavor: "黑气盘绕，一名魔修在荒界游荡至此。" },
-  { id: "ghost", name: "游荡鬼魂", hpMul: 0.8, atkMul: 1.1, stones: [25, 50], itemChance: 0.35, realms: [1, 2, 3], flavor: "寒气凝雾，鬼魂哀嚎着围拢过来。" },
-  { id: "beastking", name: "兽王", hpMul: 1.5, atkMul: 1.2, stones: [80, 150], itemChance: 0.6, realms: [0, 1], boss: true, flavor: "兽王仰天长啸，地面震颤。" },
-  { id: "demonlord", name: "天魔教徒", hpMul: 1.8, atkMul: 1.35, stones: [150, 300], itemChance: 0.8, realms: [1, 2], boss: true, flavor: "黑石座上端坐一道红袍，目光如刀。" },
-  { id: "yuanshui", name: "陨落元婴", hpMul: 2, atkMul: 1.4, stones: [300, 600], itemChance: 0.9, realms: [2, 3, 4], boss: true, flavor: "枯骨而立，眼中神光依旧森然。" },
+  { id: "wolf", name: "凶狼", hpMul: 0.7, atkMul: 0.055, stones: [10, 20], itemChance: 0.25, realms: [0], flavor: "草丛中凶气骤起，一头凶狼扑出。" },
+  { id: "beast", name: "洞窟灵兽", hpMul: 0.85, atkMul: 0.06, stones: [15, 30], itemChance: 0.3, realms: [0, 1, 2], flavor: "石缝中滑出一头生有灵纹的灵兽。" },
+  { id: "raider", name: "采药散修", hpMul: 0.8, atkMul: 0.062, stones: [20, 40], itemChance: 0.4, realms: [0, 1], flavor: "对方冷笑：「留下财货，滚吧。」" },
+  { id: "mobei", name: "游荡魔修", hpMul: 0.9, atkMul: 0.066, stones: [30, 60], itemChance: 0.4, realms: [1, 2, 3], flavor: "黑气盘绕，一名魔修在荒界游荡至此。" },
+  { id: "ghost", name: "游荡鬼魂", hpMul: 0.8, atkMul: 0.07, stones: [25, 50], itemChance: 0.35, realms: [1, 2, 3], flavor: "寒气凝雾，鬼魂哀嚎着围拢过来。" },
+  { id: "beastking", name: "兽王", hpMul: 1.15, atkMul: 0.072, stones: [80, 150], itemChance: 0.6, realms: [0, 1], boss: true, flavor: "兽王仰天长啸，地面震颤。" },
+  { id: "demonlord", name: "天魔教徒", hpMul: 1.25, atkMul: 0.082, stones: [150, 300], itemChance: 0.8, realms: [1, 2], boss: true, flavor: "黑石座上端坐一道红袍，目光如刀。" },
+  { id: "yuanshui", name: "陨落元婴", hpMul: 1.35, atkMul: 0.09, stones: [300, 600], itemChance: 0.9, realms: [2, 3, 4], boss: true, flavor: "枯骨而立，眼中神光依旧森然。" },
 ];
 
 export const DUNGEON = {
   name: "启元洞府",
-  rooms: 6, // 共 6 房，末房必为领主
+  rooms: 5, // 共 5 房，末房必为领主
   fee: 20, // 进入费用（灵石）
 };
