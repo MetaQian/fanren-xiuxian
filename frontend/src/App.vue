@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { DUNGEON, ITEMS, HERBS, PILLS, TOWER, PETS, PET_BLOOD, METHODS, MISSIONS, REALMS, SPELLS, MAP_NODES, type MapNodeDef, type HerbDef, type PillDef } from "./game/data";
 import {
   type GameState,
@@ -83,6 +83,24 @@ if (lastLog && Date.now() - lastLog.t < 10000) {
 // 修仙史册（独立页面）
 const journalOpen = ref(false);
 const journalList = computed(() => s.value.logs.slice().reverse());
+
+// ===== 主界面 Tab（一念逍遥式底部栏）=====
+// 修炼(主面板+丹炉) / 灵兽(灵兽栏) / 秘境(地图+秘境塔) / 储物(商行) / 宗门(任务+境界之路)
+const mainTab = ref<"xiu" | "shou" | "mi" | "cu" | "zong">("xiu");
+const TABS = [
+  { id: "xiu", name: "修炼", ico: "🧘" },
+  { id: "shou", name: "灵兽", ico: "🐾" },
+  { id: "mi", name: "秘境", ico: "🗺️" },
+  { id: "cu", name: "储物", ico: "👝" },
+  { id: "zong", name: "宗门", ico: "🏯" },
+] as const;
+// 战斗中（立绘与各 Tab 面板让位给战斗整屏）
+const inBattle = computed(() => !!(s.value.enemy || s.value.dungeon || s.value.tower));
+// 修行者立绘（按境界变化，水墨立像）
+const FIGURES = ["🧒", "🧑‍🎓", "🧙", "🧘", "🧚", "⚡", "☁️"];
+function figureGlyph() {
+  return FIGURES[s.value.realm] ?? "🧑";
+}
 function fmtTime(t: number) {
   const d = new Date(t);
   const p = (n: number) => String(n).padStart(2, "0");
@@ -369,24 +387,47 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="wrap">
-    <header>
-      <div class="head-row">
-        <h1>凡人修仙 <span class="sub">· 七玄外传</span></h1>
-        <button class="mini journal-btn" @click="journalOpen = true">
-          📜 史册（{{ s.logs.length }}）
-        </button>
+    <!-- 水墨山水背景（层叠山峦 + 月 + 雾，全局） -->
+    <div class="ink" aria-hidden="true">
+      <svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMax slice">
+        <circle cx="1120" cy="170" r="66" class="ink-moon" />
+        <path class="ink-far" d="M0,540 L180,420 L360,540 L520,380 L760,560 L980,400 L1200,540 L1440,420 L1440,900 L0,900 Z" />
+        <path class="ink-mid" d="M0,640 L240,520 L420,640 L640,500 L900,660 L1140,540 L1440,660 L1440,900 L0,900 Z" />
+        <path class="ink-near" d="M0,760 L280,660 L520,780 L820,660 L1120,790 L1440,700 L1440,900 L0,900 Z" />
+        <rect class="ink-mist" x="0" y="560" width="1440" height="140" />
+      </svg>
+    </div>
+
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-t">凡人修仙</span>
+        <span class="brand-s">七玄外传</span>
       </div>
-      <p class="tag">凡人流 · 放置修炼 · 每一次突破，皆是生死一线</p>
+      <div class="res">
+        <span class="res-chip realm"><span class="realm-ico">{{ realmIco() }}</span>{{ stageLabel(s.realm, s.stage) }}</span>
+        <span class="res-chip">💎 {{ s.stones.toLocaleString() }}</span>
+        <span class="res-chip">⏳ {{ REALMS[s.realm].lifespan }} 年</span>
+        <span class="res-chip dim">🕯 低调 {{ s.lowKey }}/100</span>
+        <button class="mini journal-btn" @click="journalOpen = true">📜 史册</button>
+      </div>
     </header>
 
-    <section class="card">
+    <section class="card hero-card" v-show="mainTab === 'xiu' && !inBattle">
+      <!-- 修行者立绘（一念逍遥式中央立像，随境界而变） -->
+      <div class="figure">
+        <div class="figure-glow" :style="{ animationDuration: (9 - s.realm) + 's' }"></div>
+        <div class="figure-glyph">{{ figureGlyph() }}</div>
+        <div class="figure-cap">
+          <b>{{ s.name }}</b>
+          <span class="dim">七玄门 · {{ s.rank }}</span>
+        </div>
+      </div>
       <div class="who">
-        <div><label>姓名</label><b>{{ s.name }}</b></div>
-        <div><label>身份</label><b>七玄门 · {{ s.rank }}</b></div>
-        <div><label>寿元</label><b>{{ REALMS[s.realm].lifespan }}</b></div>
+        <div><label>寿元</label><b>{{ REALMS[s.realm].lifespan }} 年</b></div>
         <div><label>灵石</label><b>{{ s.stones.toLocaleString() }}</b></div>
         <div><label>因果</label><b>{{ s.karma }}</b></div>
         <div><label>低调</label><b>{{ s.lowKey }} / 100</b></div>
+        <div><label>历时</label><b>{{ Math.floor(s.days).toLocaleString() }} 日</b></div>
       </div>
       <div class="realm-name"><span class="realm-ico">{{ realmIco() }}</span>{{ stageLabel(s.realm, s.stage) }}</div>
       <p class="realm-note">{{ REALMS[s.realm].note }}（功法：{{ methodOf(s).name }}）</p>
@@ -409,17 +450,7 @@ onBeforeUnmount(() => {
       </div>
       <button class="act" :disabled="!canAct()" @click="doAct">{{ btnText() }}</button>
       <p v-if="actHint()" class="act-hint">{{ actHint() }}</p>
-      <div class="sub-actions">
-        <button class="mini" :disabled="!!s.enemy || !!s.dungeon" @click="enterDungeon(s); flushToasts()">
-          🕳️ 探秘{{ DUNGEON.name }}（{{ DUNGEON.fee }}石）
-        </button>
-        <button class="mini" :disabled="!!s.enemy || !!s.tower || !!s.dungeon" @click="enterTower(s); flushToasts()">
-          🗼 登{{ TOWER.name }}（{{ TOWER.fee }}石）<small v-if="s.towerBest"> · 最高 {{ s.towerBest }} 层</small>
-        </button>
-        <button class="mini" @click="mapOpen = true">
-          🗺️ 场景地图 · 现居【{{ curNode().name }}】
-        </button>
-      </div>
+      <p class="dim mi-hint">⛰️ 探秘 · 登塔 · 行脚山水 → 见底部「秘境」</p>
       <!-- 入定：时长可调 + 条上预览（浅蓝段） -->
       <div class="stone-panel">
         <p class="sp-title">🧘 入定（速度 ×2.5）· 灵力条浅蓝段 = 入定后预计灵力</p>
@@ -577,8 +608,8 @@ onBeforeUnmount(() => {
       <p v-else class="dim">洞府幽暗中，你缓步前行……</p>
     </section>
 
-    <!-- 背包 / 商行 -->
-    <section class="card">
+    <!-- 储物袋 / 商行（Tab：储物） -->
+    <section class="card" v-show="mainTab === 'cu' && !inBattle">
       <h2>储物袋 / 商行</h2>
       <div class="shop">
         <div v-for="it in ITEMS" :key="it.id" class="shop-item">
@@ -594,8 +625,8 @@ onBeforeUnmount(() => {
       <p class="dim" v-if="s.dungeonClears">秘境通关 {{ s.dungeonClears }} 次。</p>
     </section>
 
-    <!-- M4：灵兽栏（七玄门灵兽园：孵化认主 + 血脉进阶） -->
-    <section class="card pet-panel">
+    <!-- M4：灵兽栏（七玄门灵兽园：孵化认主 + 血脉进阶）（Tab：灵兽） -->
+    <section class="card pet-panel" v-show="mainTab === 'shou' && !inBattle">
       <h2>🐾 灵兽栏 <em class="pet-count">{{ s.pets.length }}/5 只</em></h2>
       <div v-if="s.pets.length" class="pet-list">
         <div v-for="(pet, i) in s.pets" :key="i" class="pet-card">
@@ -618,7 +649,52 @@ onBeforeUnmount(() => {
       <p v-else class="dim">尚无灵兽。商行有售灵兽蛋（灵狐/青鳞蛇/麒麟/真龙），购得后点「用」孵化认主。</p>
     </section>
 
-    <section class="card">
+    <!-- 秘境大厅（Tab：秘境）· 探秘 / 登塔 / 行脚山水 -->
+    <section class="card mi-panel" v-show="mainTab === 'mi' && !inBattle">
+      <h2>🗺️ 秘境大厅</h2>
+      <p class="dim mi-intro">七玄门之外的山水之间，藏着机缘，也藏着杀机。择一处入内，搏一个前程。</p>
+      <div class="mi-list">
+        <div class="mi-card">
+          <div class="mi-head">
+            <b>🕳️ {{ DUNGEON.name }}</b>
+            <span class="mi-tag">Roguelike · 九重</span>
+          </div>
+          <p class="dim">须修至{{ stageLabel(s.realm, 3) }}方可入门。层层探索，破阵夺宝，九重尽破方得通关。</p>
+          <div class="mi-foot">
+            <span class="dim" v-if="!canDungeon() && !s.enemy">尚须境界（现{{ stageLabel(s.realm, s.stage) }}）</span>
+            <span class="dim" v-else-if="s.dungeonClears">已通关 {{ s.dungeonClears }} 次</span>
+            <button class="mini sp-go" :disabled="!!s.enemy || !!s.dungeon || !!s.tower || !canDungeon()" @click="enterDungeon(s); flushToasts()">
+              入内探秘（{{ DUNGEON.fee }}石）
+            </button>
+          </div>
+        </div>
+        <div class="mi-card">
+          <div class="mi-head">
+            <b>🗼 {{ TOWER.name }}</b>
+            <span class="mi-tag">无限层 · 镇守</span>
+          </div>
+          <p class="dim">后山老塔，前代掌门镇煞所立。怪随层加深，每五层有镇守，每十层有赏赐。失手即被震出。</p>
+          <div class="mi-foot">
+            <span class="dim" v-if="s.towerBest">最高曾至第 {{ s.towerBest }} 层</span>
+            <button class="mini sp-go" :disabled="!!s.enemy || !!s.tower || !!s.dungeon || s.stones < TOWER.fee" @click="enterTower(s); flushToasts()">
+              登塔（{{ TOWER.fee }}石）
+            </button>
+          </div>
+        </div>
+        <div class="mi-card">
+          <div class="mi-head">
+            <b>⛰️ 行脚山水</b>
+            <span class="mi-tag">开放世界 · 现居【{{ curNode().name }}】</span>
+          </div>
+          <p class="dim">七玄门辖下六处所在，循相邻地点移步。各有所长：洞府得灵石、演武场得战力……</p>
+          <div class="mi-foot">
+            <button class="mini sp-go" @click="mapOpen = true">展开舆图</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" v-show="mainTab === 'zong' && !inBattle">
       <h2>宗门任务</h2>
       <div class="mission" v-if="mission()">
         <div class="m-name">{{ mission()!.name }} <em class="m-desc">—— {{ mission()!.desc }}</em></div>
@@ -645,7 +721,7 @@ onBeforeUnmount(() => {
       </details>
     </section>
 
-    <section class="card">
+    <section class="card" v-show="mainTab === 'zong' && !inBattle">
       <h2>境界之路</h2>
       <div class="chips">
         <span
@@ -735,9 +811,23 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
+    <!-- 底部 Tab 栏（一念逍遥式导航） -->
+    <nav class="tabbar" v-show="!inBattle">
+      <button
+        v-for="t in TABS"
+        :key="t.id"
+        class="tab"
+        :class="{ on: mainTab === t.id }"
+        @click="mainTab = t.id"
+      >
+        <span class="tab-ico">{{ t.ico }}</span>
+        <span class="tab-name">{{ t.name }}</span>
+      </button>
+    </nav>
+
     <footer>
       <span>《凡人修仙传》同人玩法 · 仅取世界观设定</span>
-      <span>M2 · 战斗 / 秘境 / 法术 / 商行</span>
+      <span>M5 · 水墨主界面 / 修炼 / 丹道 / 灵兽 / 秘境</span>
       <button class="reset" @click="doReset">转世重修（清档）</button>
     </footer>
   </div>
