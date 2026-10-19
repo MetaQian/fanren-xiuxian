@@ -192,7 +192,6 @@ onBeforeUnmount(() => {
           <button
             class="mini retreat-btn"
             @click="retreat(s); syncLogs()"
-            :title="「保命要紧，来日方长」——脱离战斗，放弃当前秘境，不掉落灵石"
           >
             撤退（弃战保命）
           </button>
