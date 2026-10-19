@@ -434,3 +434,178 @@ footer .reset {
 footer .reset:hover {
   color: #b96a5a;
 }
+
+/* ===== 头部：标题 + 史册入口 ===== */
+.head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.head-row h1 {
+  margin: 6px 0 2px;
+}
+
+.journal-btn {
+  flex: none;
+  margin-top: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: #b8a97e;
+  background: rgba(30, 38, 56, 0.7);
+  border: 1px solid #3a4763;
+  border-radius: 8px;
+  cursor: pointer;
+  letter-spacing: 2px;
+  font-family: inherit;
+}
+
+.journal-btn:hover {
+  color: #e9cf7f;
+  border-color: #6b7ea3;
+}
+
+/* ===== 浮层提示（toast） ===== */
+.toasts {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: min(92vw, 560px);
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  max-width: 100%;
+  padding: 8px 16px;
+  font-size: 13px;
+  letter-spacing: 1px;
+  line-height: 1.6;
+  color: #cfc9b8;
+  background: rgba(18, 24, 36, 0.94);
+  border: 1px solid #2a3348;
+  border-left: 3px solid #4a5a82;
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+  animation: toast-in 0.28s ease-out;
+  text-align: center;
+}
+
+.toast.good {
+  border-left-color: #6f9c54;
+  color: #b4d89e;
+}
+
+.toast.bad {
+  border-left-color: #a03a2c;
+  color: #e0a094;
+}
+
+.toast.break {
+  border-left-color: #d9b64a;
+  color: #e9cf7f;
+  text-shadow: 0 0 8px rgba(212, 175, 55, 0.35);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== 修仙史册 · 独立页面 ===== */
+.journal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(5, 8, 13, 0.72);
+  backdrop-filter: blur(3px);
+  display: flex;
+  justify-content: center;
+  padding: 24px 12px;
+}
+
+.journal {
+  width: min(680px, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #111624;
+  border: 1px solid #2a3348;
+  border-radius: 12px;
+  box-shadow: 0 16px 60px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+
+.j-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #232c40;
+}
+
+.j-head h2 {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 4px;
+  color: #b8a97e;
+}
+
+.j-head .dim {
+  flex: 1;
+  font-size: 12px;
+}
+
+.journal ul {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.journal li {
+  display: flex;
+  gap: 12px;
+  padding: 6px 16px;
+  border-bottom: 1px solid #1a2233;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #9a9484;
+}
+
+.journal li time {
+  flex: none;
+  font-size: 11px;
+  color: #55607a;
+  font-variant-numeric: tabular-nums;
+  padding-top: 2px;
+}
+
+.journal li.good {
+  color: #9fc98a;
+}
+
+.journal li.bad {
+  color: #cf8074;
+}
+
+.journal li.break {
+  color: #e9cf7f;
+  text-shadow: 0 0 8px rgba(212, 175, 55, 0.3);
+}

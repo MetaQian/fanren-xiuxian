@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { DUNGEON, ITEMS, METHODS, MISSIONS, REALMS, SPELLS } from "./game/data";
 import {
   type GameState,
@@ -29,21 +29,62 @@ import {
 } from "./game/state";
 
 const s = ref<GameState>(load());
-const logList = ref<LogEntry[]>(s.value.logs.slice(-30).reverse());
 
-function syncLogs() {
-  logList.value = s.value.logs.slice(-30).reverse();
+// ===== 浮层提示（toast） =====
+interface Toast {
+  id: number;
+  text: string;
+  kind: LogEntry["kind"];
+}
+const toasts = ref<Toast[]>([]);
+let toastId = 0;
+let seenLogs = s.value.logs.length; // 只对新日志弹提示
+
+function flushToasts() {
+  const logs = s.value.logs;
+  if (logs.length > seenLogs) {
+    const fresh = logs.slice(seenLogs);
+    seenLogs = logs.length;
+    for (const l of fresh) {
+      const id = ++toastId;
+      toasts.value.push({ id, text: l.text, kind: l.kind });
+      // 重要事件停留久一些
+      const life = l.kind === "break" ? 6000 : 3500;
+      window.setTimeout(() => dismissToast(id), life);
+    }
+    // 最多同屏 4 条，超出最旧的立即沉底
+    if (toasts.value.length > 4) toasts.value.splice(0, toasts.value.length - 4);
+  }
+}
+function dismissToast(id: number) {
+  toasts.value = toasts.value.filter((t) => t.id !== id);
+}
+for (const l of s.value.logs.slice(-1)) {
+  // 开场白（离线结算等）首屏即弹一条，之后静默
+  const id = ++toastId;
+  toasts.value.push({ id, text: l.text, kind: l.kind });
+  window.setTimeout(() => dismissToast(id), 5000);
+}
+
+// 修仙史册（独立页面）
+const journalOpen = ref(false);
+const journalList = computed(() => s.value.logs.slice().reverse());
+function fmtTime(t: number) {
+  const d = new Date(t);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
 function doAct() {
   act(s.value);
-  syncLogs();
+  flushToasts();
 }
 
 function doReset() {
   if (!window.confirm("前尘尽断，转世重修？当前存档将被清除。")) return;
   s.value = resetGame();
-  syncLogs();
+  seenLogs = s.value.logs.length; // 清档后不弹旧提示
+  flushToasts();
 }
 
 const isFinal = () => s.value.realm === REALMS.length - 1;
@@ -90,6 +131,7 @@ onMounted(() => {
   timer = window.setInterval(() => {
     tick(s.value, 1);
     checkMissions(s.value);
+    flushToasts(); // 离线结算/任务达成等也要弹提示
     // 每 5 秒至少落盘一次，不依赖页面退出事件
     if (Date.now() - s.value.lastSave >= 5000) save(s.value);
   }, 1000);
@@ -109,7 +151,12 @@ onBeforeUnmount(() => {
 <template>
   <div class="wrap">
     <header>
-      <h1>凡人修仙 <span class="sub">· 七玄外传</span></h1>
+      <div class="head-row">
+        <h1>凡人修仙 <span class="sub">· 七玄外传</span></h1>
+        <button class="mini journal-btn" @click="journalOpen = true">
+          史册（{{ s.logs.length }}）
+        </button>
+      </div>
       <p class="tag">凡人流 · 放置修炼 · 每一次突破，皆是生死一线</p>
     </header>
 
@@ -138,13 +185,13 @@ onBeforeUnmount(() => {
       <div class="bar"><div class="fill" :style="{ width: pct + '%' }"></div></div>
       <button class="act" :disabled="!canAct()" @click="doAct">{{ btnText() }}</button>
       <div class="sub-actions">
-        <button class="mini" :disabled="meditating() || !!s.enemy" @click="meditate(s); syncLogs()">
+        <button class="mini" :disabled="meditating() || !!s.enemy" @click="meditate(s); flushToasts()">
           入定（×2.5 / 10息）
         </button>
-        <button class="mini" :disabled="s.stones <= 0" @click="stoneToSpirit(s); syncLogs()">
+        <button class="mini" :disabled="s.stones <= 0" @click="stoneToSpirit(s); flushToasts()">
           灵石化灵（1石=10灵力）
         </button>
-        <button class="mini" :disabled="!!s.enemy" @click="enterDungeon(s); syncLogs()">
+        <button class="mini" :disabled="!!s.enemy" @click="enterDungeon(s); flushToasts()">
           探秘{{ DUNGEON.name }}（{{ DUNGEON.fee }}石）
         </button>
       </div>
@@ -175,7 +222,7 @@ onBeforeUnmount(() => {
             class="mini spell"
             :disabled="!canCast(sp.id)"
             :title="sp.desc"
-            @click="castSpell(s, sp.id); syncLogs()"
+            @click="castSpell(s, sp.id); flushToasts()"
           >
             {{ sp.name }}<small>（{{ sp.cost }}灵）</small>
           </button>
@@ -185,13 +232,13 @@ onBeforeUnmount(() => {
             v-for="it in invEntries()"
             :key="it.def.id"
             class="mini"
-            @click="useItem(s, it.def.id); syncLogs()"
+            @click="useItem(s, it.def.id); flushToasts()"
           >
             用·{{ it.def.name }}×{{ it.n }}
           </button>
           <button
             class="mini retreat-btn"
-            @click="retreat(s); syncLogs()"
+            @click="retreat(s); flushToasts()"
           >
             撤退（弃战保命）
           </button>
@@ -207,10 +254,10 @@ onBeforeUnmount(() => {
       <div class="shop">
         <div v-for="it in ITEMS" :key="it.id" class="shop-item">
           <b>{{ it.name }}</b><small>{{ it.desc }}</small>
-          <button class="mini" :disabled="!!s.enemy || s.stones < it.price" @click="buyItem(s, it.id); syncLogs()">
+          <button class="mini" :disabled="!!s.enemy || s.stones < it.price" @click="buyItem(s, it.id); flushToasts()">
             购（{{ it.price }}石）
           </button>
-          <button class="mini" :disabled="!s.inv[it.id]" @click="useItem(s, it.id); syncLogs()">
+          <button class="mini" :disabled="!s.inv[it.id]" @click="useItem(s, it.id); flushToasts()">
             用（{{ s.inv[it.id] ?? 0 }}）
           </button>
         </div>
@@ -259,12 +306,36 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <section class="card log">
-      <h2>修仙日志</h2>
-      <ul>
-        <li v-for="(l, i) in logList" :key="i" :class="l.kind">{{ l.text }}</li>
-      </ul>
-    </section>
+    <!-- 修仙史册 · 独立页面 -->
+    <div class="journal-mask" v-if="journalOpen" @click.self="journalOpen = false">
+      <div class="journal">
+        <div class="j-head">
+          <h2>修仙史册</h2>
+          <span class="dim">{{ s.logs.length }} 则</span>
+          <button class="mini" @click="journalOpen = false">返回</button>
+        </div>
+        <ul v-if="journalList.length">
+          <li v-for="(l, i) in journalList" :key="i" :class="l.kind">
+            <time>{{ fmtTime(l.t) }}</time>
+            <span>{{ l.text }}</span>
+          </li>
+        </ul>
+        <p v-else class="dim">史册空空如也。</p>
+      </div>
+    </div>
+
+    <!-- 浮层提示（toast） -->
+    <div class="toasts">
+      <div
+        v-for="t in toasts"
+        :key="t.id"
+        class="toast"
+        :class="t.kind"
+        @click="dismissToast(t.id)"
+      >
+        {{ t.text }}
+      </div>
+    </div>
 
     <footer>
       <span>《凡人修仙传》同人玩法 · 仅取世界观设定</span>
