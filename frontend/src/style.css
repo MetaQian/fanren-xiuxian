@@ -1372,3 +1372,213 @@ footer .reset:hover {
 .pet-card .mini {
   align-self: flex-start;
 }
+
+/* ===== M5.7：水墨动效（多层视差漂移 + 月晕 + 双雾带）===== */
+.ink-layer {
+  will-change: transform;
+}
+.ink-l1 {
+  animation: inkDrift1 26s ease-in-out infinite alternate;
+}
+.ink-l2 {
+  animation: inkDrift2 18s ease-in-out infinite alternate;
+}
+.ink-l3 {
+  animation: inkDrift3 12s ease-in-out infinite alternate;
+}
+@keyframes inkDrift1 {
+  from { transform: translateX(0); }
+  to { transform: translateX(-46px); }
+}
+@keyframes inkDrift2 {
+  from { transform: translateX(-18px); }
+  to { transform: translateX(22px); }
+}
+@keyframes inkDrift3 {
+  from { transform: translateX(10px); }
+  to { transform: translateX(-26px); }
+}
+.ink-mist1 {
+  animation: mistDrift1 34s ease-in-out infinite alternate;
+}
+.ink-mist2 {
+  animation: mistDrift2 24s ease-in-out infinite alternate;
+}
+@keyframes mistDrift1 {
+  from { transform: translateX(-30px); opacity: 0.7; }
+  to { transform: translateX(50px); opacity: 1; }
+}
+@keyframes mistDrift2 {
+  from { transform: translateX(40px); opacity: 1; }
+  to { transform: translateX(-44px); opacity: 0.55; }
+}
+.ink-moon {
+  animation: moonGlow 9s ease-in-out infinite;
+  transform-origin: 1120px 170px;
+}
+@keyframes moonGlow {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+
+/* ===== M5.7：HUD 顶栏（左上玩家卡 + 右上资源/悬浮按钮）===== */
+.hud-player {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.hud-avatar {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgba(120, 170, 255, 0.28), rgba(14, 19, 30, 0.9));
+  border: 1.5px solid rgba(212, 175, 55, 0.55);
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.25);
+}
+.hud-pinfo {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  min-width: 0;
+}
+.hud-pname {
+  font-size: 14.5px;
+  color: #f0e6c0;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.hud-pname em {
+  font-style: normal;
+  font-size: 11px;
+  color: #c8b26a;
+  border: 1px solid rgba(200, 178, 106, 0.4);
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-left: 4px;
+  vertical-align: 1px;
+}
+.hud-prealm {
+  font-style: normal;
+  font-size: 11.5px;
+  color: #9a9484;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+.fab-btn {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 16px;
+  border-radius: 10px;
+  background: rgba(20, 26, 40, 0.8);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  cursor: pointer;
+}
+.fab-btn.red {
+  border-color: rgba(255, 120, 90, 0.7);
+  animation: fabPing 1.6s ease-in-out infinite;
+}
+@keyframes fabPing {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 120, 90, 0.35); }
+  50% { box-shadow: 0 0 0 7px rgba(255, 120, 90, 0); }
+}
+.fab-btn .dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff6a3c;
+  text-decoration: none;
+  display: block;
+}
+
+/* ===== M5.7：签到面板 ===== */
+.sign-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(5, 8, 13, 0.72);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.sign-card {
+  width: 100%;
+  max-width: 460px;
+  max-height: 86vh;
+  overflow: auto;
+}
+.sign-tip {
+  margin: -2px 0 12px;
+}
+.sign-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+.sign-day {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 2px;
+  border-radius: 8px;
+  border: 1px solid #2a3348;
+  background: rgba(12, 17, 27, 0.55);
+}
+.sign-day.seventh {
+  border-color: rgba(212, 175, 55, 0.55);
+}
+.sign-day.got {
+  opacity: 0.5;
+}
+.sign-day.next {
+  border-color: rgba(255, 120, 90, 0.7);
+  background: rgba(60, 26, 18, 0.4);
+}
+.sign-idx {
+  font-size: 10.5px;
+  color: #9a9484;
+  letter-spacing: 0.5px;
+}
+.sign-rw {
+  font-size: 10px;
+  color: #d8d3c8;
+  text-align: center;
+  line-height: 1.35;
+}
+.sign-mark {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  font-style: normal;
+  font-size: 11px;
+  color: #7fc46a;
+}
+.sign-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+}
+.sign-foot .act {
+  flex: 1;
+  font-size: 13px;
+  padding: 9px 8px;
+}

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { DUNGEON, ITEMS, HERBS, PILLS, PETS, PET_BLOOD, METHODS, MISSIONS, REALMS, SPELLS, MAP_NODES, type MapNodeDef, type HerbDef, type PillDef } from "./game/data";
+import { DUNGEON, ITEMS, HERBS, PILLS, PETS, PET_BLOOD, METHODS, MISSIONS, REALMS, SPELLS, MAP_NODES, SIGN, type MapNodeDef, type HerbDef, type PillDef } from "./game/data";
 import {
   type GameState,
   type LogEntry,
@@ -35,6 +35,10 @@ import {
   STONE_TO_SPIRIT,
   MEDITATE_MUL,
   stoneToSpirit,
+  atkOf,
+  signCanClaim,
+  signNextReward,
+  doSign,
   startBrew,
   tick,
   useItem,
@@ -99,6 +103,23 @@ const inBattle = computed(() => !!(s.value.enemy || s.value.dungeon));
 const FIGURES = ["🧒", "🧑‍🎓", "🧙", "🧘", "🧚", "⚡", "☁️"];
 function figureGlyph() {
   return FIGURES[s.value.realm] ?? "🧑";
+}
+// ===== M5.7：签到（每日 7 签循环，右上角悬浮按钮 + 面板）=====
+const signOpen = ref(false);
+function doSignNow() {
+  doSign(s.value);
+  signOpen.value = false;
+  flushToasts();
+}
+function signRewardText(r: { stones: number; spirit: number; pill: number }): string {
+  const parts = [`💎 ${r.stones}`];
+  if (r.spirit) parts.push(`💠 ${r.spirit.toLocaleString()}`);
+  if (r.pill) parts.push(`🌟 破境丹×${r.pill}`);
+  return parts.join(" · ");
+}
+// 战力（左上玩家卡显示，一念逍遥式）
+function combatPower() {
+  return maxHpOf(s.value) + atkOf(s.value) * 5 + Math.floor(s.value.spirit / 100);
 }
 function fmtTime(t: number) {
   const d = new Date(t);
@@ -385,30 +406,67 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="wrap">
-    <!-- 水墨山水背景（层叠山峦 + 月 + 雾，全局） -->
+    <!-- 水墨山水背景（多层视差漂移：远山/近山/雾带/月，动效氛围） -->
     <div class="ink" aria-hidden="true">
       <svg viewBox="0 0 1440 900" preserveAspectRatio="xMidYMax slice">
         <circle cx="1120" cy="170" r="66" class="ink-moon" />
-        <path class="ink-far" d="M0,540 L180,420 L360,540 L520,380 L760,560 L980,400 L1200,540 L1440,420 L1440,900 L0,900 Z" />
-        <path class="ink-mid" d="M0,640 L240,520 L420,640 L640,500 L900,660 L1140,540 L1440,660 L1440,900 L0,900 Z" />
-        <path class="ink-near" d="M0,760 L280,660 L520,780 L820,660 L1120,790 L1440,700 L1440,900 L0,900 Z" />
-        <rect class="ink-mist" x="0" y="560" width="1440" height="140" />
+        <g class="ink-layer ink-l1">
+          <path class="ink-far" d="M-200,540 L-20,420 L180,540 L360,380 L520,560 L760,400 L980,540 L1200,420 L1440,540 L1640,420 L1640,900 L-200,900 Z" />
+        </g>
+        <g class="ink-layer ink-l2">
+          <path class="ink-mid" d="M-200,640 L40,520 L240,640 L420,500 L640,660 L900,540 L1140,660 L1440,540 L1640,640 L1640,900 L-200,900 Z" />
+        </g>
+        <g class="ink-layer ink-l3">
+          <path class="ink-near" d="M-200,760 L80,660 L280,780 L520,660 L820,790 L1120,660 L1440,790 L1640,700 L1640,900 L-200,900 Z" />
+        </g>
+        <rect class="ink-mist ink-mist1" x="-100" y="560" width="1700" height="140" />
+        <rect class="ink-mist ink-mist2" x="-100" y="660" width="1700" height="120" />
       </svg>
     </div>
 
+    <!-- 顶部 HUD：左上玩家卡 · 右上资源条（一念逍遥式） -->
     <header class="topbar">
-      <div class="brand">
-        <span class="brand-t">凡人修仙</span>
-        <span class="brand-s">七玄外传</span>
+      <div class="hud-player">
+        <span class="hud-avatar">{{ figureGlyph() }}</span>
+        <span class="hud-pinfo">
+          <b class="hud-pname">{{ s.name }} <em>{{ s.rank }}</em></b>
+          <i class="hud-prealm">{{ realmIco() }} {{ stageLabel(s.realm, s.stage) }} · 战力 {{ combatPower().toLocaleString() }}</i>
+        </span>
       </div>
       <div class="res">
-        <span class="res-chip realm"><span class="realm-ico">{{ realmIco() }}</span>{{ stageLabel(s.realm, s.stage) }}</span>
         <span class="res-chip">💎 {{ s.stones.toLocaleString() }}</span>
         <span class="res-chip">⏳ {{ REALMS[s.realm].lifespan }}</span>
-        <span class="res-chip dim">🕯 低调 {{ s.lowKey }}/100</span>
-        <button class="mini journal-btn" @click="journalOpen = true">📜 史册</button>
+        <span class="res-chip dim">🕯 {{ s.lowKey }}/100</span>
+        <button class="mini fab-btn" :class="{ red: signCanClaim(s) }" @click="signOpen = true">📅<u class="dot" v-if="signCanClaim(s)"></u></button>
+        <button class="mini fab-btn" @click="journalOpen = true">📜</button>
       </div>
     </header>
+
+    <!-- 每日签到面板（7 签循环，第 7 天重赏） -->
+    <div class="mask sign-mask" v-if="signOpen" @click.self="signOpen = false">
+      <div class="sign-card card">
+        <h2>📅 {{ SIGN.name }}</h2>
+        <p class="dim sign-tip">每日可签一次，七日一循环，第柒签重赏。断签则自第一签重起。</p>
+        <div class="sign-grid">
+          <div
+            class="sign-day"
+            :class="{ got: d < s.signDay % SIGN.cycle || (s.signDay >= SIGN.cycle && d < SIGN.cycle && s.signDay % SIGN.cycle === 0), next: d === s.signDay % SIGN.cycle, seventh: d === SIGN.cycle - 1 }"
+            v-for="d in 7"
+            :key="d"
+          >
+            <span class="sign-idx">第{{ ["一","二","三","四","五","六","七"][d-1] }}签</span>
+            <span class="sign-rw">{{ signRewardText(SIGN.rewards[d-1]) }}</span>
+            <em class="sign-mark" v-if="d < s.signDay % SIGN.cycle || s.signDay >= SIGN.cycle && s.signDay % SIGN.cycle === 0">✓</em>
+          </div>
+        </div>
+        <div class="sign-foot">
+          <button class="act" :disabled="!signCanClaim(s)" @click="doSignNow">
+            {{ signCanClaim(s) ? `领取第${["一","二","三","四","五","六","七"][s.signDay % SIGN.cycle]}签（${signRewardText(signNextReward(s))}）` : "今日已签 · 明日再会" }}
+          </button>
+          <button class="mini" @click="signOpen = false">合上</button>
+        </div>
+      </div>
+    </div>
 
     <section class="card hero-card" v-show="mainTab === 'xiu' && !inBattle">
       <!-- 修行者立绘（一念逍遥式中央立像，随境界而变） -->
