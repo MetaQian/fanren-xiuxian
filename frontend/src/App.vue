@@ -406,7 +406,7 @@ onBeforeUnmount(() => {
       <div class="res">
         <span class="res-chip realm"><span class="realm-ico">{{ realmIco() }}</span>{{ stageLabel(s.realm, s.stage) }}</span>
         <span class="res-chip">💎 {{ s.stones.toLocaleString() }}</span>
-        <span class="res-chip">⏳ {{ REALMS[s.realm].lifespan }} 年</span>
+        <span class="res-chip">⏳ {{ REALMS[s.realm].lifespan }}</span>
         <span class="res-chip dim">🕯 低调 {{ s.lowKey }}/100</span>
         <button class="mini journal-btn" @click="journalOpen = true">📜 史册</button>
       </div>
@@ -423,7 +423,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div class="who">
-        <div><label>寿元</label><b>{{ REALMS[s.realm].lifespan }} 年</b></div>
+        <div><label>寿元</label><b>{{ REALMS[s.realm].lifespan }}</b></div>
         <div><label>灵石</label><b>{{ s.stones.toLocaleString() }}</b></div>
         <div><label>因果</label><b>{{ s.karma }}</b></div>
         <div><label>低调</label><b>{{ s.lowKey }} / 100</b></div>
