@@ -115,11 +115,30 @@ header .tag {
   height: 100%;
   background: linear-gradient(90deg, #8a6d1f, #d4af37 60%, #f3d97a);
   box-shadow: 0 0 12px rgba(212, 175, 55, 0.5);
-  transition: width 0.4s ease;
+  transition: width 0.4s ease, left 0.4s ease;
+}
+
+/* 灵力条：蓝色（贴"灵力"意象） */
+.spirit-fill {
+  background: linear-gradient(90deg, #1f4f8a, #3f8fd4 60%, #7fc4f3);
+  box-shadow: 0 0 12px rgba(63, 143, 212, 0.5);
+}
+
+/* 入定预览段：浅色蓝，显示"入定后还能到多少" */
+.med-preview {
+  position: absolute;
+  background: rgba(127, 196, 243, 0.32);
+  border-right: 1px dashed rgba(127, 196, 243, 0.8);
+  box-shadow: none;
 }
 
 .hp-bar {
   margin-bottom: 4px;
+}
+
+/* 灵力条需要容纳绝对定位的预览段 */
+.bar {
+  position: relative;
 }
 
 .hp-fill {
@@ -295,6 +314,16 @@ header .tag {
   flex: none;
   padding: 6px 12px;
   font-size: 12px;
+}
+
+.sp-preset.on {
+  border-color: #3f8fd4;
+  color: #7fc4f3;
+  background: rgba(63, 143, 212, 0.12);
+}
+
+.med-panel {
+  margin-top: 10px;
 }
 
 .sp-preview {

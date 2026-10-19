@@ -57,8 +57,7 @@ export interface GameState {
 const SAVE_KEY = "fanren_xiuxian_save_v1";
 const OFFLINE_CAP_SEC = 8 * 3600; // 离线最多结算 8 小时
 const OFFLINE_RATE = 0.5; // 离线五成速度
-const MEDITATE_SEC = 10; // 入定持续时间
-const MEDITATE_MUL = 2.5; // 入定速度倍率
+export const MEDITATE_MUL = 2.5; // 入定速度倍率
 export const STONE_TO_SPIRIT = 10; // 1 灵石抵 10 灵力
 const INJURE_SEC = 180; // 重伤时长
 const DUNGEON_MIN_STAGE = 3; // 秘境要求：本境界第 3 小境
@@ -268,15 +267,16 @@ export function act(s: GameState): void {
   save(s);
 }
 
-// 入定：10 秒内修炼速度 ×2.5
-export function meditate(s: GameState): void {
+// 入定：指定时长内修炼速度 ×2.5（时长由 UI 选择）
+export function meditate(s: GameState, sec: number): void {
   if (s.enemy) {
     pushLog(s, "生死搏杀之中，无暇入定。", "info");
     return;
   }
-  if (Date.now() < s.meditateUntil) return;
-  s.meditateUntil = Date.now() + MEDITATE_SEC * 1000;
-  pushLog(s, "屏息凝神，进入入定状态：十息之内，修炼速度 ×2.5。", "info");
+  if (Date.now() < s.meditateUntil) return; // 已在入定，不重置
+  const dur = Math.max(1, Math.min(60, Math.floor(sec)));
+  s.meditateUntil = Date.now() + dur * 1000;
+  pushLog(s, `屏息凝神，进入入定状态：${dur}息之内，修炼速度 ×2.5。`, "info");
   save(s);
 }
 

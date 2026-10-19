@@ -24,6 +24,7 @@ import {
   speedOf,
   stageLabel,
   STONE_TO_SPIRIT,
+  MEDITATE_MUL,
   stoneToSpirit,
   tick,
   useItem,
@@ -99,6 +100,32 @@ const pct = () => {
 };
 const injured = () => Date.now() < s.value.injuredUntil;
 const meditating = () => Date.now() < s.value.meditateUntil;
+
+// ===== 入定：时长可调 + 条上预览 =====
+const medSec = ref(10); // 选择的入定时长（息）
+function medBaseSpeed() {
+  const v = speedOf(s.value);
+  // speedOf 在入定中已含 ×2.5，预览要基于"基础增速"避免重复计
+  return meditating() ? v / MEDITATE_MUL : v;
+}
+function medGain() {
+  return medBaseSpeed() * (MEDITATE_MUL - 1) * medSec.value; // 入定比常态多赚的
+}
+function medPct() {
+  const c = cost();
+  if (!c) return 100;
+  return Math.min(100, ((s.value.spirit + medTotal()) / c) * 100);
+}
+function medTotal() {
+  // 入定 medSec 息共得灵力（含基础，×2.5）
+  return medBaseSpeed() * MEDITATE_MUL * medSec.value;
+}
+function doMeditate() {
+  meditate(s.value, medSec.value);
+  flushToasts();
+}
+// 入定剩余秒数（模板里取不到 Date，用函数算）
+const medLeft = () => Math.max(0, Math.ceil((s.value.meditateUntil - Date.now()) / 1000));
 const btnText = () => {
   if (s.value.enemy) return "战斗中 · 不可修炼";
   if (isFinal()) return "已臻化神 · 静待飞升";
@@ -227,7 +254,7 @@ onBeforeUnmount(() => {
       <div class="realm-name">{{ stageLabel(s.realm, s.stage) }}</div>
       <p class="realm-note">{{ REALMS[s.realm].note }}（功法：{{ methodOf(s).name }}）</p>
       <p class="bar-label">气血 · 生死之基</p>
-      <div class="bar hp-bar"><div class="fill hp-fill" :style="{ width: hpPct + '%' }"></div></div>
+      <div class="bar hp-bar"><div class="fill hp-fill" :style="{ width: hpPct() + '%' }"></div></div>
       <div class="meta">
         <span>气血 {{ Math.floor(s.hp).toLocaleString() }} / {{ maxHpOf(s).toLocaleString() }}</span>
         <span>灵力 {{ Math.floor(s.spirit).toLocaleString() }} / {{ cost() ? cost().toLocaleString() : "—" }}</span>
@@ -239,16 +266,35 @@ onBeforeUnmount(() => {
         <span>历时 {{ Math.floor(s.days).toLocaleString() }} 日</span>
       </div>
       <p class="bar-label">灵力 · 攒满即可{{ costTarget() }}</p>
-      <div class="bar"><div class="fill" :style="{ width: pct + '%' }"></div></div>
+      <div class="bar">
+        <div class="fill med-preview" :style="{ left: pct() + '%', width: Math.max(0, medPct() - pct()) + '%' }"></div>
+        <div class="fill spirit-fill" :style="{ width: pct() + '%' }"></div>
+      </div>
       <button class="act" :disabled="!canAct()" @click="doAct">{{ btnText() }}</button>
       <p v-if="actHint()" class="act-hint">{{ actHint() }}</p>
       <div class="sub-actions">
-        <button class="mini" :disabled="meditating() || !!s.enemy" @click="meditate(s); flushToasts()">
-          入定（×2.5 / 10息）
-        </button>
         <button class="mini" :disabled="!!s.enemy" @click="enterDungeon(s); flushToasts()">
           探秘{{ DUNGEON.name }}（{{ DUNGEON.fee }}石）
         </button>
+      </div>
+      <!-- 入定：时长可调 + 条上预览（浅蓝段） -->
+      <div class="stone-panel med-panel">
+        <p class="sp-title">
+          入定（速度 ×2.5）· 入定 {{ medSec }} 息可得灵力约 +{{ Math.round(medTotal()).toLocaleString() }}
+          <em v-if="meditating()" class="stat">入定中（余 {{ medLeft() }} 息）</em>
+        </p>
+        <div class="sp-row">
+          <button class="mini sp-preset" :class="{ on: medSec === 5 }" @click="medSec = 5">5息</button>
+          <button class="mini sp-preset" :class="{ on: medSec === 10 }" @click="medSec = 10">10息</button>
+          <button class="mini sp-preset" :class="{ on: medSec === 20 }" @click="medSec = 20">20息</button>
+          <button class="mini sp-preset" :class="{ on: medSec === 30 }" @click="medSec = 30">30息</button>
+          <span class="sp-preview dim">灵力条浅蓝段 = 入定后预计灵力</span>
+        </div>
+        <div class="sp-row">
+          <button class="sp-go" :disabled="meditating() || !!s.enemy" @click="doMeditate">
+            {{ meditating() ? "入定中 · 不可重入" : "入 定" }}
+          </button>
+        </div>
       </div>
       <!-- 灵石化灵：设数量 → 预览 → 确认 -->
       <div class="stone-panel">
