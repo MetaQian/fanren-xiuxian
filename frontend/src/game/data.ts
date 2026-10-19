@@ -199,3 +199,108 @@ export const DUNGEON = {
   rooms: 5, // 共 5 房，末房必为领主
   fee: 20, // 进入费用（灵石）
 };
+
+// ===== M2.5：场景地图（开放世界基础：节点 + 邻接 + 境界解锁 + 地点效果） =====
+
+export interface MapNodeDef {
+  id: string;
+  name: string;
+  icon: string;
+  kind: "home" | "wild" | "spot" | "dungeon"; // 家 / 野外(有遭遇) / 修炼宝地 / 秘境入口
+  minRealm: number; // 解锁所需境界（下标）
+  desc: string; // 地点描述（踏入时展示）
+  // wild：可遭遇的敌人 id 池 + 每秒遭遇概率 + 掉落倍数
+  enemies?: string[];
+  encounter?: number;
+  dropMul?: number;
+  // spot：停留时的修炼速度加成
+  speedBonus?: number;
+  // dungeon：此处为秘境入口（进入逻辑复用 DUNGEON）
+  dungeon?: boolean;
+  // 地图网格坐标（3 列 × 2 行）
+  x: number;
+  y: number;
+  links: string[]; // 可直达的相邻地点
+}
+
+export const MAP_NODES: MapNodeDef[] = [
+  {
+    id: "qixuan",
+    name: "七玄门",
+    icon: "🏯",
+    kind: "home",
+    minRealm: 0,
+    desc: "立誓拜入的宗门。山门巍峨，楼阁层叠，灵气温厚，是安身修行的起点。",
+    x: 0,
+    y: 0,
+    links: ["blackwind", "cave"],
+  },
+  {
+    id: "blackwind",
+    name: "黑风谷",
+    icon: "🐺",
+    kind: "wild",
+    minRealm: 0,
+    desc: "风啸日夜不休的狭谷，凶兽出没。猎杀者可得其财——凡人流，富贵险中求。",
+    enemies: ["wolf", "beast"],
+    encounter: 0.015,
+    dropMul: 1.6,
+    x: 1,
+    y: 0,
+    links: ["qixuan", "mist", "spiritfield"],
+  },
+  {
+    id: "mist",
+    name: "迷雾沼泽",
+    icon: "🌫️",
+    kind: "wild",
+    minRealm: 1,
+    desc: "浓雾如汤，鬼火夜浮。寒气侵体，迷途者十去二三——但沼泽深处，往往埋着旧人的遗宝。",
+    enemies: ["ghost", "beast"],
+    encounter: 0.02,
+    dropMul: 2.0,
+    x: 2,
+    y: 0,
+    links: ["blackwind", "demonvalley"],
+  },
+  {
+    id: "cave",
+    name: "启元洞府·入口",
+    icon: "🕳️",
+    kind: "dungeon",
+    minRealm: 0,
+    desc: "上古洞府遗刻于此，门扉只对有缘人开。府内重重杀机，末重有领主镇守。",
+    dungeon: true,
+    x: 0,
+    y: 1,
+    links: ["qixuan", "spiritfield"],
+  },
+  {
+    id: "spiritfield",
+    name: "灵脉田",
+    icon: "🌿",
+    kind: "spot",
+    minRealm: 1,
+    desc: "宗门辟出的灵脉上田，灵气浓得几乎凝出白雾。在此修炼，灵力汇聚快上一截。",
+    speedBonus: 0.3,
+    x: 1,
+    y: 1,
+    links: ["blackwind", "cave", "demonvalley"],
+  },
+  {
+    id: "demonvalley",
+    name: "魔教谷",
+    icon: "😈",
+    kind: "wild",
+    minRealm: 2,
+    desc: "天魔教盘踞之地，谷中黑气氤氲。高手如云，赏金满谷——活下来的人，都成了大修士。",
+    enemies: ["mobei", "demonlord", "ghost"],
+    encounter: 0.025,
+    dropMul: 2.8,
+    x: 2,
+    y: 1,
+    links: ["mist", "spiritfield"],
+  },
+];
+
+export const MAP_HOME = "qixuan"; // 出生 / 默认地点

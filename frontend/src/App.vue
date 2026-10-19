@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { DUNGEON, ITEMS, METHODS, MISSIONS, REALMS, SPELLS } from "./game/data";
+import { DUNGEON, ITEMS, METHODS, MISSIONS, REALMS, SPELLS, MAP_NODES, type MapNodeDef } from "./game/data";
 import {
   type GameState,
   type LogEntry,
@@ -9,6 +9,7 @@ import {
   castSpell,
   checkMissions,
   currentMission,
+  currentNode,
   dungeonOpen,
   enemyOf,
   enterDungeon,
@@ -17,7 +18,10 @@ import {
   maxHpOf,
   meditate,
   methodOf,
+  moveTo,
   nextCost,
+  nodeUnlocked,
+  nodeLockText,
   retreat,
   resetGame,
   save,
@@ -235,6 +239,54 @@ const canCast = (id: string) => {
 const invEntries = () =>
   Object.entries(s.value.inv).filter(([, n]) => n > 0).map(([id, n]) => ({ def: itemDef(id)!, n }));
 
+// ===== 场景地图 =====
+const mapOpen = ref(false);
+const curNode = () => currentNode(s.value);
+const nodePos = (n: MapNodeDef) => ({ x: 10 + n.x * 40, y: 12 + n.y * 76 }); // x:0-2→10/50/90，y:0-1→12/88
+const mapLinks = () => {
+  const seen = new Set<string>();
+  const out: { key: string; a: MapNodeDef; b: MapNodeDef }[] = [];
+  for (const n of MAP_NODES) {
+    for (const lid of n.links) {
+      const key = [n.id, lid].sort().join(">");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const b = MAP_NODES.find((x) => x.id === lid);
+      if (!b) continue;
+      out.push({ key, a: n, b });
+    }
+  }
+  return out;
+};
+const nodeState = (n: MapNodeDef) => {
+  if (n.id === s.value.loc) return "here";
+  if (!nodeUnlocked(n, s.value)) return "locked";
+  return curNode().links.includes(n.id) ? "reach" : "far";
+};
+const nodeTag = (n: MapNodeDef) => {
+  if (n.kind === "home") return "安身";
+  if (n.kind === "wild") return `出没 · 掉落×${n.dropMul ?? 1}`;
+  if (n.kind === "spot") return `灵气浓郁 +${Math.round((n.speedBonus ?? 0) * 100)}%`;
+  if (n.kind === "dungeon") return `秘境入口`;
+  return "";
+};
+const nodeClick = (n: MapNodeDef) => {
+  const st = nodeState(n);
+  if (st === "here") return;
+  if (st === "locked") {
+    toasts.value.push({ id: ++toastId, text: `${n.name}：${nodeLockText(n, s.value)}`, kind: "info" });
+    window.setTimeout(() => dismissToast(toasts.value[toasts.value.length - 1].id), 2600);
+    return;
+  }
+  if (st === "far") {
+    toasts.value.push({ id: ++toastId, text: `距${n.name}尚有山路，须循相邻地点而行。`, kind: "info" });
+    window.setTimeout(() => dismissToast(toasts.value[toasts.value.length - 1].id), 2600);
+    return;
+  }
+  moveTo(s.value, n.id);
+  flushToasts();
+};
+
 let timer: number | undefined;
 const onHide = () => save(s.value);
 onMounted(() => {
@@ -304,6 +356,9 @@ onBeforeUnmount(() => {
       <div class="sub-actions">
         <button class="mini" :disabled="!!s.enemy" @click="enterDungeon(s); flushToasts()">
           🕳️ 探秘{{ DUNGEON.name }}（{{ DUNGEON.fee }}石）
+        </button>
+        <button class="mini" @click="mapOpen = true">
+          🗺️ 场景地图 · 现居【{{ curNode().name }}】
         </button>
       </div>
       <!-- 入定：时长可调 + 条上预览（浅蓝段） -->
@@ -485,6 +540,51 @@ onBeforeUnmount(() => {
           </li>
         </ul>
         <p v-else class="dim">史册空空如也。</p>
+      </div>
+    </div>
+
+    <!-- 场景地图 · 开放世界（数据表驱动，后续可扩展新区域/节点） -->
+    <div class="map-mask" v-if="mapOpen" @click.self="mapOpen = false">
+      <div class="map">
+        <div class="j-head">
+          <h2>🗺️ 场景地图</h2>
+          <span class="dim">现居【{{ curNode().name }}】</span>
+          <button class="mini" @click="mapOpen = false">返回</button>
+        </div>
+        <div class="map-board">
+          <!-- 连线（SVG） -->
+          <svg class="map-lines" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <line
+              v-for="l in mapLinks()"
+              :key="l.key"
+              :x1="nodePos(l.a).x"
+              :y1="nodePos(l.a).y"
+              :x2="nodePos(l.b).x"
+              :y2="nodePos(l.b).y"
+              :class="{ reach: nodeState(l.a) === 'here' || nodeState(l.b) === 'here' }"
+            />
+          </svg>
+          <!-- 节点 -->
+          <button
+            v-for="n in MAP_NODES"
+            :key="n.id"
+            class="map-node"
+            :class="nodeState(n)"
+            :style="{ left: nodePos(n).x + '%', top: nodePos(n).y + '%' }"
+            @click="nodeClick(n)"
+          >
+            <span class="mn-ico">{{ n.icon }}</span>
+            <span class="mn-name">{{ n.name }}</span>
+            <span class="mn-tag">{{ nodeState(n) === "locked" ? "🔒 " + nodeLockText(n, s) : nodeTag(n) }}</span>
+          </button>
+        </div>
+        <div class="map-cur">
+          <b>当前：{{ curNode().icon }} {{ curNode().name }}</b>
+          <p class="dim">{{ curNode().desc }}</p>
+          <p class="dim small">
+            点击相邻的亮色地点即可移步；金色 = 可前往，暗色 = 尚未解锁，灰线 = 未相邻。
+          </p>
+        </div>
       </div>
     </div>
 

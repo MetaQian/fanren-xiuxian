@@ -2,11 +2,14 @@ import {
   DUNGEON,
   ENEMIES,
   ITEMS,
+  MAP_HOME,
+  MAP_NODES,
   METHODS,
   MISSIONS,
   SPELLS,
   type EnemyDef,
   type ItemDef,
+  type MapNodeDef,
   type MethodDef,
   type SpellDef,
   CN_NUM,
@@ -49,6 +52,7 @@ export interface GameState {
   enemy: EnemyState | null; // 战斗中敌人
   dungeon: { room: number; total: number } | null; // 秘境进度
   dungeonClears: number; // 秘境通关次数
+  loc: string; // 当前所在地图节点（MAP_NODES id）
   logs: LogEntry[];
   lastSave: number;
   created: number;
@@ -79,6 +83,8 @@ export function speedOf(s: GameState): number {
   let v = r.speed * (1 + 0.12 * (s.stage - 1)) * m.speedMul;
   if (Date.now() < s.meditateUntil) v *= MEDITATE_MUL;
   if (Date.now() < s.injuredUntil) v *= 0.5;
+  const node = currentNode(s);
+  if (node?.speedBonus) v *= 1 + node.speedBonus; // 宝地加成
   return v;
 }
 
@@ -86,6 +92,74 @@ export function speedOf(s: GameState): number {
 export function maxHpOf(s: GameState): number {
   const r = REALMS[s.realm];
   return Math.round((100 + 10 * (s.realm + 1)) * r.speed * (1 + 0.15 * (s.stage - 1)));
+}
+
+// ===== M2.5：场景地图 =====
+
+// 当前所在节点（找不到回退出生地）
+export function currentNode(s: GameState): MapNodeDef {
+  return MAP_NODES.find((n) => n.id === s.loc) ?? MAP_NODES.find((n) => n.id === MAP_HOME)!;
+}
+
+// 可直达的相邻节点（含解锁状态）
+export function adjacentNodes(s: GameState): MapNodeDef[] {
+  const cur = currentNode(s);
+  return cur.links
+    .map((id) => MAP_NODES.find((n) => n.id === id))
+    .filter((n): n is MapNodeDef => !!n);
+}
+
+export function nodeUnlocked(n: MapNodeDef, s: GameState): boolean {
+  return s.realm >= n.minRealm;
+}
+
+export function nodeLockText(n: MapNodeDef, s: GameState): string {
+  return `需${REALMS[n.minRealm].name}期方可前往`;
+}
+
+// 移动：只能去相邻且已解锁的地点；战斗中不可
+export function moveTo(s: GameState, id: string): void {
+  if (s.enemy) {
+    pushLog(s, "生死搏杀之中，走不开身。", "info");
+    return;
+  }
+  if (s.dungeon) {
+    pushLog(s, "身在" + DUNGEON.name + "之内，脱身方可远行。", "info");
+    return;
+  }
+  const target = MAP_NODES.find((n) => n.id === id);
+  if (!target) return;
+  const cur = currentNode(s);
+  if (!cur.links.includes(id)) {
+    pushLog(s, "两地方隔山海，须循路而至。", "info");
+    return;
+  }
+  if (!nodeUnlocked(target, s)) {
+    pushLog(s, `${target.name}气息森然，境界不足，未敢贸然踏入。`, "info");
+    return;
+  }
+  s.loc = id;
+  pushLog(s, `移步【${target.name}】：${target.desc}`, "info");
+  // 踏入野外：立刻可能遭遇
+  if (target.kind === "wild" && target.encounter) {
+    tryWildEncounter(s, target);
+  }
+  save(s);
+}
+
+// 野外遭遇：按概率结算（moveTo 踏入时 dtSec=1；tick 每秒传实际秒数）
+export function tryWildEncounter(s: GameState, node?: MapNodeDef, dtSec = 1): void {
+  if (s.enemy || s.dungeon) return;
+  const nd = node ?? currentNode(s);
+  if (nd.kind !== "wild" || !nd.encounter) return;
+  if (Math.random() >= nd.encounter * dtSec) return;
+  const pool = nd.enemies
+    ? ENEMIES.filter((e) => nd.enemies!.includes(e.id) && e.realms.includes(s.realm))
+    : [];
+  const def = pool.length ? pool[rnd(0, pool.length - 1)] : ENEMIES[0];
+  spawnEnemy(s, def);
+  pushLog(s, `${nd.name}中突起杀机——${def.flavor} 是【${def.name}】！`, def.boss ? "break" : "bad");
+  save(s);
 }
 
 export function atkOf(s: GameState): number {
@@ -166,6 +240,7 @@ export function newGame(): GameState {
     enemy: null,
     dungeon: null,
     dungeonClears: 0,
+    loc: MAP_HOME,
     logs: [],
     lastSave: Date.now(),
     created: Date.now(),
@@ -173,6 +248,7 @@ export function newGame(): GameState {
   s.hp = maxHpOf(s);
   pushLog(s, "七玄门外门弟子韩立，自此踏上修仙之路。", "info");
   pushLog(s, "灵气入体，修炼开始：每息自动积累灵力，攒够即可突破。", "info");
+  pushLog(s, "身在七玄门，可于下方地图移步各景：野外猎敌、宝地加速、秘境寻宝。", "info");
   return s;
 }
 
@@ -223,6 +299,8 @@ export function tick(s: GameState, dtSec: number): void {
   s.days += dtSec;
   // 缓慢回气（满 10 秒回 1% 气血）
   s.hp = Math.min(maxHpOf(s), s.hp + (maxHpOf(s) / 10) * (dtSec / 10));
+  // 野外：每秒按概率遭遇
+  tryWildEncounter(s, undefined, dtSec);
 }
 
 // 修炼 / 突破
@@ -417,7 +495,8 @@ function enemyTurn(s: GameState, edef: EnemyDef): void {
 function winFight(s: GameState, edef: EnemyDef): void {
   const e = s.enemy!;
   s.enemy = null;
-  const stoneGain = rnd(edef.stones[0], edef.stones[1]) * (1 + s.realm);
+  const mul = 1 + (currentNode(s).dropMul ?? 0) + s.realm; // 地点越险，掉落越多
+  const stoneGain = rnd(edef.stones[0], edef.stones[1]) * mul;
   const spiritGain = Math.round(e.maxHp * 0.6);
   s.stones += stoneGain;
   s.spirit += spiritGain;
