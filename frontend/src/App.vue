@@ -110,6 +110,19 @@ const FIGURES = ["🧒", "🧑‍🎓", "🧙", "🧘", "🧚", "⚡", "☁️"]
 function figureGlyph() {
   return FIGURES[s.value.realm] ?? "🧑";
 }
+// M6.3：AI 水墨立绘（图加载失败时自动退回上面的 emoji，永不黑块）
+function figureImg() {
+  return `/img/c_${Math.min(s.value.realm, 3)}.webp`;
+}
+function hideFallback(e: Event) {
+  const img = e.target as HTMLImageElement;
+  const fb = img.parentElement?.querySelector(".player-emoji, .foe-emoji");
+  if (fb) (fb as HTMLElement).style.display = "none";
+}
+// 敌人立绘（白底水墨立像，圆头像）
+function enemyImg(id?: string) {
+  return id ? `/img/e_${id}.webp` : "";
+}
 // ===== M5.7：签到（每日 7 签循环，右上角悬浮按钮 + 面板）=====
 const signOpen = ref(false);
 function doSignNow() {
@@ -553,7 +566,10 @@ onBeforeUnmount(() => {
     <!-- 顶部 HUD：左上玩家卡 · 右上资源条（一念逍遥式） -->
     <header class="topbar">
       <div class="hud-player">
-        <span class="hud-avatar">{{ figureGlyph() }}</span>
+        <span class="hud-avatar">
+          <img :src="figureImg()" :alt="s.name" @load="(e: Event) => hideFallback(e)" @error="(e: Event) => ((e.target as HTMLImageElement).style.display = 'none')" />
+          <span class="hud-avatar-emoji">{{ figureGlyph() }}</span>
+        </span>
         <span class="hud-pinfo">
           <b class="hud-pname">{{ s.name }} <em>{{ s.rank }}</em></b>
           <i class="hud-prealm">{{ realmIco() }} {{ stageLabel(s.realm, s.stage) }} · 战力 {{ combatPower().toLocaleString() }}</i>
@@ -612,6 +628,8 @@ onBeforeUnmount(() => {
       </div>
       <!-- M6：横版行走场景（人在山水里走：视差远山 + 可点地点 + 行走人物） -->
       <div class="scene-shell" ref="sceneShellEl">
+        <!-- M6.3：AI 水墨山水背景（加载失败自动隐，退回 SVG 剪影） -->
+        <img class="scene-ink" src="/img/scene.webp" alt="" @error="(e: Event) => ((e.target as HTMLImageElement).style.display = 'none')" />
         <svg class="scene-sky sky-far" viewBox="0 0 1440 300" preserveAspectRatio="none" aria-hidden="true">
           <path d="M-400,190 L-260,120 L-80,190 L120,90 L300,200 L520,110 L720,190 L900,100 L1100,195 L1300,120 L1500,200 L1720,110 L1920,190 L2120,100 L2320,195 L2540,120 L2740,200 L2960,110 L3160,190 L3360,140 L3360,300 L-400,300 Z" />
         </svg>
@@ -635,7 +653,11 @@ onBeforeUnmount(() => {
             </button>
             <!-- 人物（行走缓动 + 朝向翻转 + 落脚阴影） -->
             <div class="scene-player" :style="{ left: playerX + 'px' }">
-              <span class="player-glyph" :class="{ walking: walking }" :style="{ transform: 'scaleX(' + face + ')' }">{{ figureGlyph() }}</span>
+              <span class="player-glyph" :class="{ walking: walking }" :style="{ transform: 'scaleX(' + face + ')' }">
+                <img class="player-fig" :src="figureImg()" :alt="s.name"
+                     @load="(e: Event) => hideFallback(e)" @error="(e: Event) => ((e.target as HTMLImageElement).style.display = 'none')" />
+                <span class="player-emoji">{{ figureGlyph() }}</span>
+              </span>
               <span class="player-shadow"></span>
               <span class="player-tag">{{ s.name }}</span>
             </div>
@@ -784,16 +806,24 @@ onBeforeUnmount(() => {
     </section>
 
     <!-- 战斗 / 秘境 -->
-    <section class="card" v-if="s.enemy || s.dungeon">
+    <section class="card battle-card" v-if="s.enemy || s.dungeon">
+      <!-- M6.3：秘境洞府水墨底图（失败自动隐） -->
+      <img class="battle-bg" src="/img/battle.webp" alt="" @error="(e: Event) => ((e.target as HTMLImageElement).style.display = 'none')" />
       <h2>
         {{ s.dungeon ? `🕳️ 秘境·${DUNGEON.name} 第 ${s.dungeon.room + 1}/${s.dungeon.total} 重` : "⚔️ 遭遇战" }}
         <em v-if="enemy() && enemyDef()?.boss" class="boss-tag">领主</em>
       </h2>
       <div v-if="s.enemy" class="battle">
         <div class="foe">
-          <b>{{ ico(enemyDef()?.id) }} {{ enemyDef()?.name }}</b>
+          <span class="foe-fig">
+            <img :src="enemyImg(enemyDef()?.id)" :alt="enemyDef()?.name" @load="(e: Event) => hideFallback(e)" @error="(e: Event) => ((e.target as HTMLImageElement).style.display = 'none')" />
+            <span class="foe-emoji">{{ ico(enemyDef()?.id) }}</span>
+          </span>
+          <span class="foe-info">
+          <b>{{ enemyDef()?.name }}</b>
           <div class="bar foe-bar"><div class="fill foe-fill" :style="{ width: (s.enemy.hp / s.enemy.maxHp) * 100 + '%' }"></div></div>
           <span class="dim">{{ Math.max(0, Math.floor(s.enemy.hp)) }} / {{ s.enemy.maxHp }} 气血</span>
+          </span>
         </div>
         <div class="spell-row">
           <button
