@@ -365,7 +365,7 @@ const canCast = (id: string) => {
 const invEntries = () =>
   Object.entries(s.value.inv)
     .filter(([, n]) => n > 0)
-    .map(([id, n]) => ({ def: itemDef(id) ?? PILLS.find((p) => p.id === id)!, n }));
+    .map(([id, n]) => ({ def: itemDef(id) ?? PILLS.find((p) => p.id === id) ?? HERBS.find((h) => h.id === id)!, n }));
 
 // ===== 场景地图 =====
 const mapOpen = ref(false);

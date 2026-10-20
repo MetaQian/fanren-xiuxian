@@ -533,29 +533,31 @@ export function tick(s: GameState, dtSec: number): void {
   // 野外：每秒按概率遭遇
   tryWildEncounter(s, undefined, dtSec);
   // M6.1：挂机猎妖（自动出手 / 自动寻敌；重伤时暂停，避免无限送死）
-  if (s.auto && !s.dungeon && !(Date.now() < s.injuredUntil)) {
-    const nd = currentNode(s);
-    if (s.enemy) {
-      // 自动出手：每息一次（徒手平斩不耗灵力，灵力留给突破；手动战斗才放法术）
-      s.autoAtkAcc += dtSec;
-      while (s.autoAtkAcc >= 1 && s.enemy) {
-        s.autoAtkAcc -= 1;
-        basicAttack(s);
+    // 自动出手在野外和秘境都生效；自动寻敌只在野外（秘境按房间推进）
+    if (s.auto && !(Date.now() < s.injuredUntil)) {
+      if (s.enemy) {
+        // 自动出手：每息一次（徒手平斩不耗灵力，灵力留给突破；手动战斗才放法术）
+        s.autoAtkAcc += dtSec;
+        while (s.autoAtkAcc >= 1 && s.enemy) {
+          s.autoAtkAcc -= 1;
+          basicAttack(s);
+        }
+      } else {
+        const nd = currentNode(s);
+        if (!s.dungeon && nd.kind === "wild" && nd.enemies?.length) {
+          // 自动寻敌：在野外每 2 息刷一只（直接生成，不走概率遭遇）
+          s.autoAtkAcc += dtSec * 0.5;
+          if (s.autoAtkAcc >= 1) {
+            s.autoAtkAcc = 0;
+            const pool = ENEMIES.filter((e) => nd.enemies!.includes(e.id) && e.realms.includes(s.realm));
+            const def = pool.length ? pool[rnd(0, pool.length - 1)] : ENEMIES[0];
+            spawnEnemy(s, def);
+            pushLog(s, `${nd.name}中杀机又起——【${def.name}】扑来！`, def.boss ? "break" : "info");
+            save(s);
+          }
+        }
       }
-    } else if (nd.kind === "wild" && nd.enemies?.length) {
-      // 自动寻敌：在野外每 2 息刷一只（直接生成，不走概率遭遇）
-      s.autoAtkAcc += dtSec * 0.5;
-      if (s.autoAtkAcc >= 1) {
-        s.autoAtkAcc = 0;
-        const pool = ENEMIES.filter((e) => nd.enemies!.includes(e.id) && e.realms.includes(s.realm));
-        const def = pool.length ? pool[rnd(0, pool.length - 1)] : ENEMIES[0];
-        spawnEnemy(s, def);
-        pushLog(s, `${nd.name}中杀机又起——【${def.name}】扑来！`, def.boss ? "break" : "info");
-      }
-    } else {
-      s.autoAtkAcc = 0;
     }
-  }
 }
 
 // 徒手攻击（自动战斗兜底，不耗灵力）
