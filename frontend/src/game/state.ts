@@ -53,6 +53,8 @@ export interface GameState {
   spirit: number; // 当前灵力
   stones: number; // 灵石（宗门资源）
   methodId: string; // 当前功法
+  methodRank: number; // M6.2：功法品阶（0=凡品 起，可温养提升）
+  spellMastery: number; // M6.2：神通温养等级（攻击类法术伤害 +25%/级）
   missionIdx: number; // MISSIONS 推进下标（下一条待领任务）
   rank: string; // 宗门身份
   days: number; // 游戏内天数（1 现实秒 = 1 息 ≈ 1 天）
@@ -112,7 +114,7 @@ export function methodOf(s: GameState): MethodDef {
 export function speedOf(s: GameState): number {
   const r = REALMS[s.realm];
   const m = methodOf(s);
-  let v = r.speed * (1 + 0.12 * (s.stage - 1)) * m.speedMul;
+  let v = r.speed * (1 + 0.12 * (s.stage - 1)) * m.speedMul * (1 + 0.15 * s.methodRank); // M6.2：功法品阶
   if (Date.now() < s.meditateUntil) v *= MEDITATE_MUL;
   if (Date.now() < s.gatherUntil && s.gatherMul > 0) v *= 1 + s.gatherMul; // 凝气丹
   if (Date.now() < s.injuredUntil) v *= 0.5;
@@ -439,6 +441,8 @@ export function newGame(): GameState {
     equip: {},
     equipBag: [],
     autoAtkAcc: 0,
+    methodRank: 0,
+    spellMastery: 0,
     logs: [],
     lastSave: Date.now(),
     created: Date.now(),
@@ -536,11 +540,18 @@ export function tick(s: GameState, dtSec: number): void {
     // 自动出手在野外和秘境都生效；自动寻敌只在野外（秘境按房间推进）
     if (s.auto && !(Date.now() < s.injuredUntil)) {
       if (s.enemy) {
-        // 自动出手：每息一次（徒手平斩不耗灵力，灵力留给突破；手动战斗才放法术）
+        // 自动出手：每息一次。M6.2 智能施法——灵力留够「本次突破所需的一半」才放神通，
+        // 否则徒手平斩（不耗灵力），绝不为了打架耽误突破。
         s.autoAtkAcc += dtSec;
         while (s.autoAtkAcc >= 1 && s.enemy) {
           s.autoAtkAcc -= 1;
-          basicAttack(s);
+          const reserve = nextCost(s) * 0.5;
+          const pick = autoSpellPick(s);
+          if (pick && s.spirit - pick.cost >= reserve) {
+            castSpell(s, pick.id);
+          } else {
+            basicAttack(s);
+          }
         }
       } else {
         const nd = currentNode(s);
@@ -628,6 +639,78 @@ export function act(s: GameState): void {
   }
   checkMissions(s);
   save(s);
+}
+
+// ===== M6.2：功法品阶 + 神通温养 =====
+
+const RANK_NAMES = ["凡品", "下品", "中品", "上品", "极品", "天品"];
+export const MAX_METHOD_RANK = QUALITIES.length - 1; // 6 档（0-5）
+export const MAX_SPELL_MASTER = 8; // 神通温养上限
+
+export function methodRankName(s: GameState, delta = 0): string {
+  const i = Math.min(s.methodRank + delta, RANK_NAMES.length - 1);
+  return RANK_NAMES[i];
+}
+export function methodRankMul(s: GameState): number {
+  return 1 + 0.15 * s.methodRank;
+}
+// 神通伤害倍率（温养 +25%/级；攻击类法术生效）
+export function spellMul(s: GameState): number {
+  return 1 + 0.25 * s.spellMastery;
+}
+// 功法品阶升阶费用（灵石，按大境界缩放）
+export function methodRankCost(s: GameState): number {
+  const base = (300 + 250 * s.methodRank * (s.methodRank + 1)) * (1 + s.realm);
+  return Math.round(base / 10) * 10;
+}
+// 神通温养费用（灵石，按大境界缩放）
+export function spellMasteryCost(s: GameState): number {
+  const base = (200 + 160 * s.spellMastery * (s.spellMastery + 1)) * (1 + s.realm);
+  return Math.round(base / 10) * 10;
+}
+
+// 温养功法：品阶 +1（修炼提速 +15%/品）
+export function warmMethod(s: GameState): void {
+  if (s.methodRank >= MAX_METHOD_RANK) {
+    pushLog(s, "功法已臻天品，无可再温养。", "info");
+    return;
+  }
+  const cost = methodRankCost(s);
+  if (s.stones < cost) {
+    pushLog(s, `灵石不足，尚难温养功法（需 ${cost.toLocaleString()}）。`, "info");
+    return;
+  }
+  s.stones -= cost;
+  s.methodRank += 1;
+  pushLog(s, `以灵力反哺功法，【${methodOf(s).name}】淬至【${methodRankName(s)}】——修炼速度 +${15 * s.methodRank}%。`, "good");
+  save(s);
+}
+
+// 温养神通：法术品阶 +1（攻击法术伤害 +25%/级）
+export function warmSpell(s: GameState): void {
+  if (s.spellMastery >= MAX_SPELL_MASTER) {
+    pushLog(s, "神通已温养至大成，威力无可再增。", "info");
+    return;
+  }
+  const cost = spellMasteryCost(s);
+  if (s.stones < cost) {
+    pushLog(s, `灵石不足，尚难温养神通（需 ${cost.toLocaleString()}）。`, "info");
+    return;
+  }
+  s.stones -= cost;
+  s.spellMastery += 1;
+  pushLog(s, `昼夜揣摩神通，威力更进一层（+${25 * s.spellMastery}%）——法术伤害 ×${spellMul(s).toFixed(2)}。`, "good");
+  save(s);
+}
+
+// 自动战斗智能施法：挑当前境界/灵力付得起的最强攻击法术
+export function autoSpellPick(s: GameState): SpellDef | null {
+  const pool = SPELLS.filter(
+    (sp) => sp.mul > 0 && s.realm >= sp.realm && s.spirit >= sp.cost,
+  );
+  if (!pool.length) return null;
+  pool.sort((a, b) => b.mul * (b.critMul ?? 1) - a.mul * (a.critMul ?? 1));
+  return pool[0];
 }
 
 // 入定：指定时长内修炼速度 ×2.5（时长由 UI 选择）
@@ -898,7 +981,7 @@ export function castSpell(s: GameState, id: string): void {
   const edef = enemyOf(s)!;
 
   if (sp.mul > 0) {
-    let dmg = Math.round(atkOf(s) * sp.mul * (0.9 + Math.random() * 0.2));
+    let dmg = Math.round(atkOf(s) * sp.mul * spellMul(s) * (0.9 + Math.random() * 0.2)); // M6.2：神通温养
     let crit = false;
     if (sp.crit && Math.random() < sp.crit) {
       dmg = Math.round(dmg * (sp.critMul ?? 2));

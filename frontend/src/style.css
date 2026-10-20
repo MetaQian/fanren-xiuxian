@@ -1977,6 +1977,37 @@ footer .reset:hover {
   }
 }
 
+/* ===== M6.2：温养面板 ===== */
+.warm-panel .warm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px dashed rgba(210, 190, 150, 0.18);
+}
+.warm-panel .warm-row:last-child {
+  border-bottom: none;
+}
+.warm-panel .warm-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.warm-panel .warm-tail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.warm-panel .warm-tail .dim {
+  font-size: 12px;
+}
+.warm-panel .warm-tail .sp-go {
+  min-width: 128px;
+  justify-content: center;
+}
+
 /* ===== M6.3：AI 水墨图（加载失败全部自动退回 emoji/SVG，永不黑块）===== */
 /* HUD 玩家头像里的立绘 */
 .hud-avatar img {

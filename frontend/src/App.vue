@@ -47,6 +47,15 @@ import {
   wearEquip,
   unwearEquip,
   sellEquip,
+  warmMethod,
+  warmSpell,
+  methodRankName,
+  methodRankMul,
+  spellMul,
+  methodRankCost,
+  spellMasteryCost,
+  MAX_METHOD_RANK,
+  MAX_SPELL_MASTER,
 } from "./game/state";
 
 const s = ref<GameState>(load());
@@ -330,6 +339,15 @@ function doStoneToSpirit() {
   }
   stoneToSpirit(s.value, n);
   stoneAmt.value = 0; // 用完清空，避免误连点
+  flushToasts();
+}
+// M6.2：温养（功法品阶 / 神通品阶）
+function doWarmMethod() {
+  warmMethod(s.value);
+  flushToasts();
+}
+function doWarmSpell() {
+  warmSpell(s.value);
   flushToasts();
 }
 let lastToastText = "";
@@ -744,6 +762,46 @@ onBeforeUnmount(() => {
           </span>
           <span class="sp-preview dim" v-else>输入数量，预览将增加的灵力</span>
           <button class="sp-go" :disabled="stoneCount() <= 0" @click="doStoneToSpirit">确认化灵</button>
+        </div>
+      </div>
+      <!-- M6.2：功法品阶 + 神通温养（灵石 → 修炼速度 / 法术威力） -->
+      <div class="stone-panel warm-panel">
+        <p class="sp-title">📜 温养（功法品阶提速 · 神通品阶增威）</p>
+        <div class="warm-row">
+          <div class="warm-head">
+            <b>功法 · {{ methodOf(s).name }}（{{ methodRankName(s) }}）</b>
+            <span class="recipe-meta">修炼速度 ×{{ methodRankMul(s).toFixed(2) }}</span>
+          </div>
+          <div class="warm-tail">
+            <span class="dim" v-if="s.methodRank >= MAX_METHOD_RANK">已臻天品</span>
+            <span class="dim" v-else>升阶 → 修炼 +15%，下阶 {{ methodRankName(s, 1) }}</span>
+            <button
+              class="mini sp-go"
+              :disabled="s.methodRank >= MAX_METHOD_RANK || s.stones < methodRankCost(s)"
+              :title="s.stones < methodRankCost(s) ? `需灵石 ${methodRankCost(s).toLocaleString()}` : ''"
+              @click="doWarmMethod"
+            >
+              温养（{{ methodRankCost(s).toLocaleString() }}石）
+            </button>
+          </div>
+        </div>
+        <div class="warm-row">
+          <div class="warm-head">
+            <b>神通 · 温养 {{ s.spellMastery }} 层</b>
+            <span class="recipe-meta">法术伤害 ×{{ spellMul(s).toFixed(2) }}</span>
+          </div>
+          <div class="warm-tail">
+            <span class="dim" v-if="s.spellMastery >= MAX_SPELL_MASTER">已至大成</span>
+            <span class="dim" v-else>再温一层 → 伤害 +25%</span>
+            <button
+              class="mini sp-go"
+              :disabled="s.spellMastery >= MAX_SPELL_MASTER || s.stones < spellMasteryCost(s)"
+              :title="s.stones < spellMasteryCost(s) ? `需灵石 ${spellMasteryCost(s).toLocaleString()}` : ''"
+              @click="doWarmSpell"
+            >
+              温养（{{ spellMasteryCost(s).toLocaleString() }}石）
+            </button>
+          </div>
         </div>
       </div>
       <!-- M3：炼丹炉（药材 → 丹药，成功率仿一念逍遥 random_drug） -->
