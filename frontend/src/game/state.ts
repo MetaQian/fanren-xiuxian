@@ -28,7 +28,6 @@ import {
   type EquipItem,
   CN_NUM,
   REALMS,
-  SIGN,
   SUB4,
 } from "./data";
 
@@ -76,8 +75,6 @@ export interface GameState {
   breakPillStacks: number; // 破境丹层数（0-3，大突破时消耗）
   pets: { id: string; blood: number }[]; // 灵兽：id + 血脉等级(1-5)
   petStoneAcc: number; // 灵兽灵石被动产出累加器（<1 时攒着）
-  signDay: number; // 签到进度（1-7，0=本轮未签）
-  signLastDay: string; // 上次签到日期（本地 YYYY-MM-DD，同日不重复）
   auto: boolean; // M6.1：挂机猎妖开关（自动寻敌 + 自动出手 + 自动拾取）
   kills: number; // 累计斩妖数
   killDay: string; // 当日计数日期
@@ -319,33 +316,11 @@ export function sellEquip(s: GameState, uid: number): void {
   save(s);
 }
 
-// ===== M5.7：每日签到（7 天一循环，第 7 天重赏；断签则从第 1 天重起）=====
+// 斩妖赏/日志的本地日期键
 export function localDayKey(t = Date.now()): string {
   const d = new Date(t);
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
-export function signCanClaim(s: GameState): boolean {
-  return s.signLastDay !== localDayKey();
-}
-export function signNextReward(s: GameState) {
-  return SIGN.rewards[s.signDay % SIGN.cycle];
-}
-export function doSign(s: GameState): void {
-  if (!signCanClaim(s)) return;
-  const day = (s.signDay % SIGN.cycle) + 1; // 本次领第几天
-  const r = signNextReward(s);
-  s.stones += r.stones;
-  if (r.spirit) s.spirit += r.spirit;
-  if (r.pill) {
-    const room = Math.min(r.pill, 3 - s.breakPillStacks);
-    s.breakPillStacks += room;
-    if (room < r.pill) pushLog(s, "破境丹力已满（3 层），溢出的丹碎作了云烟。", "info");
-  }
-  s.signDay += 1;
-  s.signLastDay = localDayKey();
-  pushLog(s, `【${SIGN.name}】第 ${day} 签：得灵石 ${r.stones}${r.spirit ? `、灵力 ${r.spirit.toLocaleString()}` : ""}${r.pill ? `、破境丹 ×${r.pill}` : ""}。`, "good");
-  save(s);
 }
 
 export function enemyOf(s: GameState): EnemyDef | null {
@@ -430,8 +405,6 @@ export function newGame(): GameState {
     breakPillStacks: 0,
     pets: [],
     petStoneAcc: 0,
-    signDay: 0,
-    signLastDay: "",
     auto: true,
     kills: 0,
     killDay: localDayKey(),

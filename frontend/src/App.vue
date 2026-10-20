@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from "vue";
-import { DUNGEON, ITEMS, HERBS, PILLS, PETS, PET_BLOOD, METHODS, MISSIONS, REALMS, SPELLS, MAP_NODES, SIGN, MATS, EQUIP_SLOTS, QUALITIES, AFFIXES, FORGE_RECIPES, KILL_REWARDS, type MapNodeDef, type HerbDef, type PillDef, type EquipItem } from "./game/data";
+import { DUNGEON, ITEMS, HERBS, PILLS, PETS, PET_BLOOD, METHODS, MISSIONS, REALMS, SPELLS, MAP_NODES, MATS, EQUIP_SLOTS, QUALITIES, AFFIXES, FORGE_RECIPES, KILL_REWARDS, type MapNodeDef, type HerbDef, type PillDef, type EquipItem } from "./game/data";
 import {
   type GameState,
   type LogEntry,
@@ -36,9 +36,6 @@ import {
   MEDITATE_MUL,
   stoneToSpirit,
   atkOf,
-  signCanClaim,
-  signNextReward,
-  doSign,
   startBrew,
   tick,
   useItem,
@@ -131,19 +128,6 @@ function hideFallback(e: Event) {
 // 敌人立绘（白底水墨立像，圆头像）
 function enemyImg(id?: string) {
   return id ? `/img/e_${id}.webp` : "";
-}
-// ===== M5.7：签到（每日 7 签循环，右上角悬浮按钮 + 面板）=====
-const signOpen = ref(false);
-function doSignNow() {
-  doSign(s.value);
-  signOpen.value = false;
-  flushToasts();
-}
-function signRewardText(r: { stones: number; spirit: number; pill: number }): string {
-  const parts = [`💎 ${r.stones}`];
-  if (r.spirit) parts.push(`💠 ${r.spirit.toLocaleString()}`);
-  if (r.pill) parts.push(`🌟 破境丹×${r.pill}`);
-  return parts.join(" · ");
 }
 // 战力（左上玩家卡显示，一念逍遥式；含装备）
 function combatPower() {
@@ -597,36 +581,9 @@ onBeforeUnmount(() => {
         <span class="res-chip">💎 {{ s.stones.toLocaleString() }}</span>
         <span class="res-chip">⏳ {{ REALMS[s.realm].lifespan }}</span>
         <span class="res-chip dim">🕯 {{ s.lowKey }}/100</span>
-        <button class="mini fab-btn" :class="{ red: signCanClaim(s) }" @click="signOpen = true">📅<u class="dot" v-if="signCanClaim(s)"></u></button>
         <button class="mini fab-btn" @click="journalOpen = true">📜</button>
       </div>
     </header>
-
-    <!-- 每日签到面板（7 签循环，第 7 天重赏） -->
-    <div class="mask sign-mask" v-if="signOpen" @click.self="signOpen = false">
-      <div class="sign-card card">
-        <h2>📅 {{ SIGN.name }}</h2>
-        <p class="dim sign-tip">每日可签一次，七日一循环，第柒签重赏。断签则自第一签重起。</p>
-        <div class="sign-grid">
-          <div
-            class="sign-day"
-            :class="{ got: d < s.signDay % SIGN.cycle || (s.signDay >= SIGN.cycle && d < SIGN.cycle && s.signDay % SIGN.cycle === 0), next: d === s.signDay % SIGN.cycle, seventh: d === SIGN.cycle - 1 }"
-            v-for="d in 7"
-            :key="d"
-          >
-            <span class="sign-idx">第{{ ["一","二","三","四","五","六","七"][d-1] }}签</span>
-            <span class="sign-rw">{{ signRewardText(SIGN.rewards[d-1]) }}</span>
-            <em class="sign-mark" v-if="d < s.signDay % SIGN.cycle || s.signDay >= SIGN.cycle && s.signDay % SIGN.cycle === 0">✓</em>
-          </div>
-        </div>
-        <div class="sign-foot">
-          <button class="act" :disabled="!signCanClaim(s)" @click="doSignNow">
-            {{ signCanClaim(s) ? `领取第${["一","二","三","四","五","六","七"][s.signDay % SIGN.cycle]}签（${signRewardText(signNextReward(s))}）` : "今日已签 · 明日再会" }}
-          </button>
-          <button class="mini" @click="signOpen = false">合上</button>
-        </div>
-      </div>
-    </div>
 
     <section class="card hero-card" v-show="mainTab === 'xiu' && !inBattle">
       <!-- M6.1：挂机猎妖（一念逍遥式自动打怪循环开关 + 每日斩妖赏进度） -->

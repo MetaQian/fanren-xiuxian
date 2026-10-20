@@ -389,22 +389,6 @@ export const MAP_NODES: MapNodeDef[] = [
   },
 ];
 
-// ===== M5.7：每日签到（对标一念逍遥 sign_reward_config：连签7天一周循环，第7天重赏）=====
-export const SIGN = {
-  name: "每日签到",
-  cycle: 7, // 7 天一循环
-  // 第 1-7 天奖励（灵石 / 灵力 / 破境丹）
-  rewards: [
-    { stones: 20, spirit: 0, pill: 0 },
-    { stones: 30, spirit: 0, pill: 0 },
-    { stones: 50, spirit: 500, pill: 0 },
-    { stones: 70, spirit: 0, pill: 0 },
-    { stones: 100, spirit: 800, pill: 0 },
-    { stones: 150, spirit: 0, pill: 1 },
-    { stones: 300, spirit: 2000, pill: 2 }, // 第 7 天重赏
-  ],
-};
-
 // ===== M6.1：锻造材料（灵石矿 + 妖核，对标一念逍遥 矿石+妖核 掉落）=====
 export const MATS: { id: string; name: string; icon: string; desc: string }[] = [
   { id: "ore", name: "灵矿石", icon: "⛏️", desc: "打怪所得，锻造装备的根基。" },
